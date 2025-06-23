@@ -10,18 +10,30 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
-  const { login, isLoading } = useAuth();
+  const [localError, setLocalError] = useState('');
+  const { login, isLoading, error } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setLocalError('');
+    
+    if (!email.trim()) {
+      setLocalError('Please enter your email address');
+      return;
+    }
+
+    if (!password.trim()) {
+      setLocalError('Please enter your password');
+      return;
+    }
     
     const success = await login(email, password);
-    if (!success) {
-      setError('Invalid email or password');
+    if (!success && !error) {
+      setLocalError('Invalid email or password');
     }
   };
+
+  const displayError = localError || error;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
@@ -38,9 +50,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
         {/* Login Form */}
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {error && (
+            {displayError && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                {error}
+                {displayError}
               </div>
             )}
 
@@ -53,7 +65,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (localError) setLocalError('');
+                  }}
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                   placeholder="Enter your email"
                   required
@@ -70,7 +85,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    if (localError) setLocalError('');
+                  }}
                   className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                   placeholder="Enter your password"
                   required
