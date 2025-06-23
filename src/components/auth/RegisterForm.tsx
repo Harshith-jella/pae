@@ -16,26 +16,36 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleMode }) => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [error, setError] = useState('');
-  const { register, isLoading } = useAuth();
+  const [localError, setLocalError] = useState('');
+  const { register, isLoading, error } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setLocalError('');
     
     if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+      setLocalError('Passwords do not match');
       return;
     }
 
     if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters');
+      setLocalError('Password must be at least 6 characters');
+      return;
+    }
+
+    if (!formData.name.trim()) {
+      setLocalError('Please enter your full name');
+      return;
+    }
+
+    if (!formData.email.trim()) {
+      setLocalError('Please enter your email address');
       return;
     }
     
     const success = await register(formData.email, formData.password, formData.name, formData.role);
-    if (!success) {
-      setError('Registration failed. Please try again.');
+    if (!success && !error) {
+      setLocalError('Registration failed. Please try again.');
     }
   };
 
@@ -44,7 +54,11 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleMode }) => {
       ...prev,
       [e.target.name]: e.target.value
     }));
+    // Clear errors when user starts typing
+    if (localError) setLocalError('');
   };
+
+  const displayError = localError || error;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
@@ -61,9 +75,9 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleMode }) => {
         {/* Register Form */}
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {error && (
+            {displayError && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                {error}
+                {displayError}
               </div>
             )}
 
