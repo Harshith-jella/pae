@@ -23,12 +23,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
     }
   };
 
-  const demoCredentials = [
-    { role: 'Admin', email: 'admin@pae.com', password: 'demo123' },
-    { role: 'Owner', email: 'owner@pae.com', password: 'demo123' },
-    { role: 'User', email: 'user@pae.com', password: 'demo123' }
-  ];
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
@@ -39,22 +33,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to PAE</h1>
           <p className="text-gray-600">Your premium parking solution</p>
-        </div>
-
-        {/* Demo Credentials */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <h3 className="text-sm font-semibold text-blue-900 mb-2">Demo Credentials:</h3>
-          <div className="space-y-1 text-xs text-blue-800">
-            {demoCredentials.map((cred, index) => (
-              <div key={index} className="flex justify-between">
-                <span className="font-medium">{cred.role}:</span>
-                <span>{cred.email}</span>
-              </div>
-            ))}
-            <div className="mt-2 pt-2 border-t border-blue-200">
-              <span className="font-medium">Password for all: demo123</span>
-            </div>
-          </div>
         </div>
 
         {/* Login Form */}
