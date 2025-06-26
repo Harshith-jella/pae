@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { ParkingCircle, Mail, Lock, Eye, EyeOff, AlertCircle, Wifi, WifiOff, AlertTriangle, Clock } from 'lucide-react';
+import { ParkingCircle, Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { testConnection } from '../../lib/supabase';
 
 interface LoginFormProps {
   onToggleMode: () => void;
@@ -12,28 +11,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState('');
-  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
-  const [loginTimeout, setLoginTimeout] = useState(false);
   const { login, isLoading, error } = useAuth();
-
-  React.useEffect(() => {
-    const checkConnection = async () => {
-      try {
-        const isConnected = await testConnection();
-        setConnectionStatus(isConnected ? 'connected' : 'disconnected');
-      } catch (error) {
-        console.error('Connection check failed:', error);
-        setConnectionStatus('disconnected');
-      }
-    };
-
-    checkConnection();
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError('');
-    setLoginTimeout(false);
     
     if (!email.trim()) {
       setLocalError('Please enter your email address');
@@ -45,20 +27,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
       return;
     }
     
-    // Set a timeout to detect hanging requests
-    const timeoutId = setTimeout(() => {
-      setLoginTimeout(true);
-    }, 20000); // 20 seconds
-    
     try {
       const success = await login(email, password);
-      clearTimeout(timeoutId);
-      
       if (!success && !error && !localError) {
         setLocalError('Login failed. Please check your credentials and try again.');
       }
     } catch (error) {
-      clearTimeout(timeoutId);
       console.error('Login form error:', error);
       setLocalError('An unexpected error occurred. Please try again.');
     }
@@ -66,6 +40,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
 
   const displayError = localError || error;
 
+  // Demo credentials helper
   const fillDemoCredentials = (role: 'admin' | 'owner' | 'user') => {
     const credentials = {
       admin: { email: 'admin@pae.com', password: 'password123' },
@@ -78,30 +53,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
     setLocalError('');
   };
 
-  const retryConnection = async () => {
-    setConnectionStatus('checking');
-    try {
-      const isConnected = await testConnection();
-      setConnectionStatus(isConnected ? 'connected' : 'disconnected');
-      if (isConnected) {
-        setLocalError('');
-      }
-    } catch (error) {
-      console.error('Retry connection failed:', error);
-      setConnectionStatus('disconnected');
-    }
-  };
-
-  const showServerWarning = displayError && (
-    displayError.includes('technical difficulties') ||
-    displayError.includes('server error') ||
-    displayError.includes('temporarily unavailable') ||
-    displayError.includes('configuration issue') ||
-    displayError.includes('unexpected error') ||
-    displayError.includes('Database error') ||
-    displayError.includes('experiencing issues')
-  );
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
@@ -112,73 +63,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to PAE</h1>
           <p className="text-gray-600">Your premium parking solution</p>
-        </div>
-
-        {/* Timeout Warning */}
-        {loginTimeout && (
-          <div className="mb-4 p-4 rounded-lg bg-orange-50 border border-orange-200">
-            <div className="flex items-start">
-              <Clock className="text-orange-600 mr-3 mt-0.5 flex-shrink-0" size={20} />
-              <div>
-                <h3 className="text-sm font-semibold text-orange-800 mb-1">Request Taking Too Long</h3>
-                <p className="text-sm text-orange-700">
-                  The login request is taking longer than expected. This may indicate server issues. Please try refreshing the page.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Server Status Warning */}
-        {showServerWarning && (
-          <div className="mb-4 p-4 rounded-lg bg-amber-50 border border-amber-200">
-            <div className="flex items-start">
-              <AlertTriangle className="text-amber-600 mr-3 mt-0.5 flex-shrink-0" size={20} />
-              <div>
-                <h3 className="text-sm font-semibold text-amber-800 mb-1">Server Issue Detected</h3>
-                <p className="text-sm text-amber-700 mb-2">
-                  The authentication service is experiencing technical difficulties. This appears to be a temporary server-side issue.
-                </p>
-                <p className="text-xs text-amber-600">
-                  Please try again in a few minutes. If the problem persists, contact support.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Connection Status */}
-        <div className={`mb-4 p-3 rounded-lg flex items-center justify-between ${
-          connectionStatus === 'connected' ? 'bg-green-50 border border-green-200' :
-          connectionStatus === 'disconnected' ? 'bg-red-50 border border-red-200' :
-          'bg-yellow-50 border border-yellow-200'
-        }`}>
-          <div className="flex items-center">
-            {connectionStatus === 'connected' ? (
-              <Wifi className="text-green-600 mr-2" size={16} />
-            ) : connectionStatus === 'disconnected' ? (
-              <WifiOff className="text-red-600 mr-2" size={16} />
-            ) : (
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600 mr-2"></div>
-            )}
-            <span className={`text-sm font-medium ${
-              connectionStatus === 'connected' ? 'text-green-800' :
-              connectionStatus === 'disconnected' ? 'text-red-800' :
-              'text-yellow-800'
-            }`}>
-              {connectionStatus === 'connected' ? 'Connected to server' :
-               connectionStatus === 'disconnected' ? 'Connection issues detected' :
-               'Checking connection...'}
-            </span>
-          </div>
-          {connectionStatus === 'disconnected' && (
-            <button
-              onClick={retryConnection}
-              className="text-sm text-red-600 hover:text-red-700 font-medium"
-            >
-              Retry
-            </button>
-          )}
         </div>
 
         {/* Demo Credentials */}
@@ -212,7 +96,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
         {/* Login Form */}
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {displayError && !showServerWarning && (
+            {displayError && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start">
                 <AlertCircle className="mr-2 mt-0.5 flex-shrink-0" size={16} />
                 <div>

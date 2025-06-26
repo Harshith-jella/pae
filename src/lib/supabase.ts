@@ -7,7 +7,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-// Create Supabase client with timeout configuration
+// Create Supabase client with simple configuration
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
@@ -18,12 +18,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   global: {
     headers: {
       'X-Client-Info': 'pae-parking-app'
-    },
-    fetch: (url, options = {}) => {
-      return fetch(url, {
-        ...options,
-        signal: AbortSignal.timeout(10000) // 10 second timeout
-      });
     }
   },
   db: {
@@ -31,40 +25,10 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
-// Simple connection test with timeout
-export const testConnection = async () => {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-    
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select('count')
-      .limit(1)
-      .abortSignal(controller.signal);
-    
-    clearTimeout(timeoutId);
-    
-    if (error) {
-      console.error('Connection test failed:', error);
-      return false;
-    }
-    
-    console.log('Supabase connection successful');
-    return true;
-  } catch (error: any) {
-    console.error('Connection test error:', error);
-    return false;
-  }
-};
-
-// Enhanced auth helpers with timeout and better error handling
+// Enhanced auth helpers
 export const auth = {
   signUp: async (email: string, password: string, metadata: any = {}) => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-      
       const result = await supabase.auth.signUp({
         email,
         password,
@@ -72,8 +36,6 @@ export const auth = {
           data: metadata
         }
       });
-      
-      clearTimeout(timeoutId);
       
       if (result.error) {
         console.error('SignUp error:', result.error);
@@ -93,10 +55,6 @@ export const auth = {
     } catch (error: any) {
       console.error('SignUp exception:', error);
       
-      if (error.name === 'AbortError') {
-        throw new Error('Request timed out. Please check your connection and try again.');
-      }
-      
       if (error.message?.includes('fetch') || error.message?.includes('Failed to fetch')) {
         throw new Error('Network error. Please check your internet connection and try again.');
       }
@@ -107,15 +65,10 @@ export const auth = {
 
   signIn: async (email: string, password: string) => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-
       const result = await supabase.auth.signInWithPassword({
         email,
         password
       });
-      
-      clearTimeout(timeoutId);
       
       if (result.error) {
         console.error('SignIn error:', result.error);
@@ -138,10 +91,6 @@ export const auth = {
       return result;
     } catch (error: any) {
       console.error('SignIn exception:', error);
-      
-      if (error.name === 'AbortError') {
-        throw new Error('Login request timed out. Please try again.');
-      }
       
       if (error.message?.includes('fetch') || error.message?.includes('Failed to fetch')) {
         throw new Error('Network error. Please check your internet connection and try again.');
@@ -181,21 +130,16 @@ export const auth = {
   }
 };
 
-// Database helpers with timeout
+// Database helpers
 export const db = {
   getUserProfile: async (userId: string) => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
-      
       const result = await supabase
         .from('user_profiles')
         .select('*')
         .eq('id', userId)
-        .single()
-        .abortSignal(controller.signal);
+        .single();
       
-      clearTimeout(timeoutId);
       return result;
     } catch (error) {
       console.error('getUserProfile error:', error);

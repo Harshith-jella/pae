@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User as SupabaseUser } from '@supabase/supabase-js';
-import { supabase, auth, testConnection } from '../lib/supabase';
+import { supabase, auth } from '../lib/supabase';
 import { User } from '../types';
 
 interface AuthContextType {
@@ -23,21 +23,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let mounted = true;
-    let timeoutId: NodeJS.Timeout;
 
     const getInitialSession = async () => {
       try {
-        // Set a timeout for the entire initialization process
-        timeoutId = setTimeout(() => {
-          if (mounted) {
-            console.warn('Session initialization timed out');
-            setLoading(false);
-          }
-        }, 10000); // 10 second timeout
-
         const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (timeoutId) clearTimeout(timeoutId);
         
         if (error) {
           console.error('Error getting session:', error);
@@ -46,7 +35,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await loadUserProfile(session.user);
         }
       } catch (error: any) {
-        if (timeoutId) clearTimeout(timeoutId);
         console.error('Error in getInitialSession:', error);
         setError('Unable to connect to the authentication service. Please refresh the page.');
       } finally {
@@ -79,7 +67,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       mounted = false;
-      if (timeoutId) clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, []);
