@@ -134,9 +134,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         password,
         options: {
           data: {
-            name: name,
-            role: role,
-            full_name: name
+            full_name: name,
+            role: role
           }
         }
       });
