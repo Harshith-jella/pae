@@ -23,40 +23,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let mounted = true;
+    let timeoutId: NodeJS.Timeout;
 
-    // Test connection and get initial session
     const getInitialSession = async () => {
       try {
-        // Test database connection first
-        const connectionOk = await testConnection();
-        if (!connectionOk) {
-          console.warn('Database connection test failed, but continuing with auth check...');
-        }
+        // Set a timeout for the entire initialization process
+        timeoutId = setTimeout(() => {
+          if (mounted) {
+            console.warn('Session initialization timed out');
+            setLoading(false);
+          }
+        }, 10000); // 10 second timeout
 
         const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (timeoutId) clearTimeout(timeoutId);
+        
         if (error) {
           console.error('Error getting session:', error);
-          
-          // Handle specific session errors more gracefully
-          if (error.message.includes('Database error') || error.message.includes('schema')) {
-            setError('Authentication service is experiencing issues. Some features may be limited.');
-          } else {
-            setError('Unable to verify your login status. Please try refreshing the page.');
-          }
+          setError('Unable to verify your login status. Please try refreshing the page.');
         } else if (session?.user && mounted) {
           await loadUserProfile(session.user);
         }
       } catch (error: any) {
+        if (timeoutId) clearTimeout(timeoutId);
         console.error('Error in getInitialSession:', error);
-        
-        // More specific error handling for initial session
-        if (error.message?.includes('fetch') || error.message?.includes('network')) {
-          setError('Network connection issue. Please check your internet connection.');
-        } else if (error.message?.includes('schema') || error.message?.includes('Database')) {
-          setError('Authentication service is temporarily unavailable. Please try again later.');
-        } else {
-          setError('Unable to connect to the authentication service. Please refresh the page.');
-        }
+        setError('Unable to connect to the authentication service. Please refresh the page.');
       } finally {
         if (mounted) {
           setLoading(false);
@@ -66,7 +58,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     getInitialSession();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event, session?.user?.email);
       
@@ -81,8 +72,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (error) {
         console.error('Error handling auth state change:', error);
-        // Don't set error state for auth state change issues
-        // as this might be a temporary problem
       } finally {
         setLoading(false);
       }
@@ -90,6 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     return () => {
       mounted = false;
+      if (timeoutId) clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, []);
@@ -98,7 +88,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Loading user profile for:', supabaseUser.email);
       
-      // Get the profile
       const { data: profile, error } = await supabase
         .from('user_profiles')
         .select('*')
@@ -108,7 +97,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('Error loading user profile:', error);
         
-        // If profile doesn't exist, create it
         if (error.code === 'PGRST116') {
           console.log('Profile not found, creating...');
           
@@ -129,7 +117,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           if (createError) {
             console.error('Error creating profile:', createError);
-            // Fall back to using auth user data
             setUser({
               id: supabaseUser.id,
               email: supabaseUser.email || '',
@@ -151,8 +138,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
           }
         } else {
-          // For other errors, fall back to auth user data
-          console.log('Using fallback user data due to profile error');
           setUser({
             id: supabaseUser.id,
             email: supabaseUser.email || '',
@@ -178,7 +163,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error('Error in loadUserProfile:', error);
-      // Fall back to using auth user data
       setUser({
         id: supabaseUser.id,
         email: supabaseUser.email || '',
@@ -203,7 +187,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('Login error:', error);
         setError(error.message);
-        setIsLoading(false);
         return false;
       }
 
@@ -212,16 +195,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await loadUserProfile(data.user);
       }
 
-      setIsLoading(false);
       return true;
     } catch (error: any) {
       console.error('Login exception:', error);
-      
-      // The error message from auth.signIn is already user-friendly
       setError(error.message || 'An unexpected error occurred during login. Please try again.');
-      
-      setIsLoading(false);
       return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -241,34 +221,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('Registration error:', error);
         setError(error.message);
-        setIsLoading(false);
         return false;
       }
 
       console.log('Registration response:', data);
 
       if (data.user) {
-        // Check if email confirmation is required
         if (!data.session) {
           setError('Please check your email to confirm your account before signing in.');
-          setIsLoading(false);
           return false;
         }
         
-        // If we have a session, the user is automatically signed in
         await loadUserProfile(data.user);
       }
 
-      setIsLoading(false);
       return true;
     } catch (error: any) {
       console.error('Registration exception:', error);
-      
-      // The error message from auth.signUp is already user-friendly
       setError(error.message || 'An unexpected error occurred during registration. Please try again.');
-      
-      setIsLoading(false);
       return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -279,7 +252,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setError(null);
     } catch (error) {
       console.error('Logout error:', error);
-      // Don't show logout errors to user - just clear the state
       setUser(null);
       setError(null);
     }

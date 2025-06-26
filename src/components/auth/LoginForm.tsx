@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ParkingCircle, Mail, Lock, Eye, EyeOff, AlertCircle, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
+import { ParkingCircle, Mail, Lock, Eye, EyeOff, AlertCircle, Wifi, WifiOff, AlertTriangle, Clock } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { testConnection } from '../../lib/supabase';
 
@@ -13,9 +13,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState('');
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
+  const [loginTimeout, setLoginTimeout] = useState(false);
   const { login, isLoading, error } = useAuth();
 
-  // Check connection status on component mount
   React.useEffect(() => {
     const checkConnection = async () => {
       try {
@@ -33,6 +33,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLocalError('');
+    setLoginTimeout(false);
     
     if (!email.trim()) {
       setLocalError('Please enter your email address');
@@ -44,12 +45,20 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
       return;
     }
     
+    // Set a timeout to detect hanging requests
+    const timeoutId = setTimeout(() => {
+      setLoginTimeout(true);
+    }, 20000); // 20 seconds
+    
     try {
       const success = await login(email, password);
+      clearTimeout(timeoutId);
+      
       if (!success && !error && !localError) {
         setLocalError('Login failed. Please check your credentials and try again.');
       }
     } catch (error) {
+      clearTimeout(timeoutId);
       console.error('Login form error:', error);
       setLocalError('An unexpected error occurred. Please try again.');
     }
@@ -57,7 +66,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
 
   const displayError = localError || error;
 
-  // Demo credentials helper
   const fillDemoCredentials = (role: 'admin' | 'owner' | 'user') => {
     const credentials = {
       admin: { email: 'admin@pae.com', password: 'password123' },
@@ -67,7 +75,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
     
     setEmail(credentials[role].email);
     setPassword(credentials[role].password);
-    setLocalError(''); // Clear any existing errors
+    setLocalError('');
   };
 
   const retryConnection = async () => {
@@ -84,13 +92,14 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
     }
   };
 
-  // Determine if we should show a server issue warning
   const showServerWarning = displayError && (
     displayError.includes('technical difficulties') ||
     displayError.includes('server error') ||
     displayError.includes('temporarily unavailable') ||
     displayError.includes('configuration issue') ||
-    displayError.includes('unexpected error')
+    displayError.includes('unexpected error') ||
+    displayError.includes('Database error') ||
+    displayError.includes('experiencing issues')
   );
 
   return (
@@ -104,6 +113,21 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to PAE</h1>
           <p className="text-gray-600">Your premium parking solution</p>
         </div>
+
+        {/* Timeout Warning */}
+        {loginTimeout && (
+          <div className="mb-4 p-4 rounded-lg bg-orange-50 border border-orange-200">
+            <div className="flex items-start">
+              <Clock className="text-orange-600 mr-3 mt-0.5 flex-shrink-0" size={20} />
+              <div>
+                <h3 className="text-sm font-semibold text-orange-800 mb-1">Request Taking Too Long</h3>
+                <p className="text-sm text-orange-700">
+                  The login request is taking longer than expected. This may indicate server issues. Please try refreshing the page.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Server Status Warning */}
         {showServerWarning && (
