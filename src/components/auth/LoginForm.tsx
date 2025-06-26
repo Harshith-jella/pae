@@ -35,6 +35,18 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
 
   const displayError = localError || error;
 
+  // Demo credentials helper
+  const fillDemoCredentials = (role: 'admin' | 'owner' | 'user') => {
+    const credentials = {
+      admin: { email: 'admin@pae.com', password: 'password123' },
+      owner: { email: 'owner@pae.com', password: 'password123' },
+      user: { email: 'user@pae.com', password: 'password123' }
+    };
+    
+    setEmail(credentials[role].email);
+    setPassword(credentials[role].password);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
@@ -45,6 +57,34 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to PAE</h1>
           <p className="text-gray-600">Your premium parking solution</p>
+        </div>
+
+        {/* Demo Credentials */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <h3 className="text-sm font-semibold text-blue-900 mb-3">Demo Credentials:</h3>
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => fillDemoCredentials('admin')}
+              className="w-full text-left px-3 py-2 text-sm bg-white border border-blue-200 rounded hover:bg-blue-50 transition-colors"
+            >
+              <span className="font-medium">Admin:</span> admin@pae.com / password123
+            </button>
+            <button
+              type="button"
+              onClick={() => fillDemoCredentials('owner')}
+              className="w-full text-left px-3 py-2 text-sm bg-white border border-blue-200 rounded hover:bg-blue-50 transition-colors"
+            >
+              <span className="font-medium">Owner:</span> owner@pae.com / password123
+            </button>
+            <button
+              type="button"
+              onClick={() => fillDemoCredentials('user')}
+              className="w-full text-left px-3 py-2 text-sm bg-white border border-blue-200 rounded hover:bg-blue-50 transition-colors"
+            >
+              <span className="font-medium">User:</span> user@pae.com / password123
+            </button>
+          </div>
         </div>
 
         {/* Login Form */}

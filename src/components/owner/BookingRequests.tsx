@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 import { Calendar, MapPin, Clock, User, CheckCircle, XCircle, AlertCircle, DollarSign } from 'lucide-react';
 import { mockBookings, mockParkingSpaces } from '../../data/mockData';
+import { useAuth } from '../../contexts/AuthContext';
 
 export const BookingRequests: React.FC = () => {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'pending' | 'confirmed' | 'completed'>('pending');
 
-  // Mock owner ID for demo
-  const ownerId = '2';
-  
   // Get bookings for spaces owned by the current user
-  const ownerSpaces = mockParkingSpaces.filter(space => space.ownerId === ownerId);
+  const ownerSpaces = mockParkingSpaces.filter(space => space.ownerId === user?.id);
   const ownerSpaceIds = ownerSpaces.map(space => space.id);
   const ownerBookings = mockBookings.filter(booking => ownerSpaceIds.includes(booking.spaceId));
 

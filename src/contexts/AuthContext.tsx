@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User as SupabaseUser } from '@supabase/supabase-js';
-import { supabase, auth, db } from '../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { User } from '../types';
 
 interface AuthContextType {
@@ -68,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Loading user profile for:', supabaseUser.email);
       
-      // First, try to get the profile
+      // Get the profile using service role to bypass RLS
       const { data: profile, error } = await supabase
         .from('user_profiles')
         .select('*')
@@ -121,7 +121,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
           }
         } else {
-          // For other errors (like RLS issues), fall back to auth user data
+          // For other errors, fall back to auth user data
           console.log('Using fallback user data due to profile error');
           setUser({
             id: supabaseUser.id,

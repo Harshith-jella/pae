@@ -16,32 +16,17 @@ import {
   DollarSign,
   List,
   TrendingUp,
-  User,
-  UserCheck
+  User
 } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface SidebarProps {
   currentPage: string;
   onPageChange: (page: string) => void;
-  user: {
-    id: string;
-    name: string;
-    email: string;
-    role: 'admin' | 'owner' | 'user';
-    avatar?: string;
-    createdAt: string;
-  };
-  userRole: 'admin' | 'owner' | 'user';
-  onRoleChange: (role: 'admin' | 'owner' | 'user') => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ 
-  currentPage, 
-  onPageChange, 
-  user, 
-  userRole, 
-  onRoleChange 
-}) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange }) => {
+  const { user, logout } = useAuth();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const getMenuItems = () => {
@@ -73,7 +58,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     return [
       ...commonItems,
-      ...roleSpecificItems[userRole]
+      ...roleSpecificItems[user?.role || 'user']
     ];
   };
 
@@ -112,23 +97,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">PAE</h1>
-              <p className="text-sm text-gray-500 capitalize">{userRole} Portal</p>
+              <p className="text-sm text-gray-500 capitalize">{user?.role} Portal</p>
             </div>
           </div>
-        </div>
-
-        {/* Role Switcher */}
-        <div className="px-4 py-4 border-b border-gray-200">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Demo Mode - Switch Role:</label>
-          <select
-            value={userRole}
-            onChange={(e) => onRoleChange(e.target.value as 'admin' | 'owner' | 'user')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-          >
-            <option value="user">User (Customer)</option>
-            <option value="owner">Owner (Space Owner)</option>
-            <option value="admin">Admin</option>
-          </select>
         </div>
 
         {/* Navigation */}
@@ -158,7 +129,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           })}
         </nav>
 
-        {/* User Profile */}
+        {/* User Profile & Logout */}
         <div className="border-t border-gray-200 p-4">
           <div className="flex items-center space-x-3 mb-4">
             {user?.avatar ? (
@@ -179,12 +150,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <p className="text-xs text-gray-500 truncate">{user?.email}</p>
             </div>
           </div>
-          <div className="text-center">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
-              <UserCheck size={16} />
-              <span>Demo Mode</span>
-            </div>
-          </div>
+          <button
+            onClick={logout}
+            className="w-full flex items-center space-x-3 px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200"
+          >
+            <LogOut size={18} />
+            <span className="font-medium">Logout</span>
+          </button>
         </div>
       </div>
     </>

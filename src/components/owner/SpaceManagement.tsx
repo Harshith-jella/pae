@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { Plus, MapPin, Star, Clock, DollarSign, Edit, Trash2, Eye, ToggleLeft, ToggleRight } from 'lucide-react';
 import { ParkingSpace } from '../../types';
 import { mockParkingSpaces } from '../../data/mockData';
+import { useAuth } from '../../contexts/AuthContext';
 
 export const SpaceManagement: React.FC = () => {
+  const { user } = useAuth();
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null);
 
-  // Mock owner ID for demo
-  const ownerId = '2';
-  const ownerSpaces = mockParkingSpaces.filter(space => space.ownerId === ownerId);
+  const ownerSpaces = mockParkingSpaces.filter(space => space.ownerId === user?.id);
 
   const AddSpaceModal = ({ onClose }: { onClose: () => void }) => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
