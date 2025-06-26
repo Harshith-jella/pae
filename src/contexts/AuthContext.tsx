@@ -57,6 +57,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadUserProfile = async (supabaseUser: SupabaseUser) => {
     try {
+      // Wait a bit for the trigger to create the profile
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       const { data: profile, error } = await supabase
         .from('user_profiles')
         .select('*')
@@ -65,13 +68,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (error) {
         console.error('Error loading user profile:', error);
-        // If profile doesn't exist, create it
+        
+        // If profile doesn't exist, try to create it manually
         if (error.code === 'PGRST116') {
-          console.log('Profile not found, will be created by trigger');
-          // Wait a moment for the trigger to create the profile
-          setTimeout(async () => {
-            await loadUserProfile(supabaseUser);
-          }, 1000);
+          console.log('Profile not found, creating manually...');
+          
+          const { data: newProfile, error: createError } = await supabase
+            .from('user_profiles')
+            .insert({
+              id: supabaseUser.id,
+              email: supabaseUser.email || '',
+              name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || 'New User',
+              role: supabaseUser.user_metadata?.role || 'user'
+            })
+            .select()
+            .single();
+          
+          if (createError) {
+            console.error('Error creating profile manually:', createError);
+            return;
+          }
+          
+          if (newProfile) {
+            setUser({
+              id: newProfile.id,
+              email: newProfile.email,
+              name: newProfile.name,
+              role: newProfile.role,
+              avatar: newProfile.avatar_url,
+              createdAt: newProfile.created_at
+            });
+          }
         }
         return;
       }
@@ -158,10 +185,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         
         // If we have a session, the user is automatically signed in
-        // Wait a bit for the trigger to create the profile
+        // Wait for the trigger to create the profile
         setTimeout(async () => {
           await loadUserProfile(data.user!);
-        }, 1500);
+        }, 2000);
       }
 
       setIsLoading(false);
