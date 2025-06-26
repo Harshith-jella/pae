@@ -30,13 +30,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (error) {
           console.error('Error getting session:', error);
-          setError('Unable to verify your login status. Please try refreshing the page.');
+          setError('Unable to verify your login status.');
         } else if (session?.user && mounted) {
           await loadUserProfile(session.user);
         }
       } catch (error: any) {
         console.error('Error in getInitialSession:', error);
-        setError('Unable to connect to the authentication service. Please refresh the page.');
+        setError('Unable to connect to the authentication service.');
       } finally {
         if (mounted) {
           setLoading(false);
@@ -47,7 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     getInitialSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.email);
+      console.log('Auth state changed:', event);
       
       if (!mounted) return;
 
@@ -61,7 +61,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (error) {
         console.error('Error handling auth state change:', error);
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     });
 
@@ -75,14 +77,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Loading user profile for:', supabaseUser.email);
       
-      const { data: profile, error } = await supabase
+      // Try to get the profile, but don't fail if it doesn't exist
+      const { data: profile } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('id', supabaseUser.id)
         .maybeSingle();
-      
-      if (error) {
-        console.error('Error loading user profile:', error);
+
+      if (profile) {
+        setUser({
+          id: profile.id,
+          email: profile.email,
+          name: profile.name,
+          role: profile.role,
+          avatar: profile.avatar_url,
+          createdAt: profile.created_at
+        });
+      } else {
+        // Create a fallback user from auth data
         setUser({
           id: supabaseUser.id,
           email: supabaseUser.email || '',
@@ -92,61 +104,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: (supabaseUser.user_metadata?.role as 'admin' | 'owner' | 'user') || 'user',
           createdAt: supabaseUser.created_at
         });
-        return;
-      }
-
-      if (!profile) {
-        console.log('Profile not found, creating...');
-        
-        const profileData = {
-          id: supabaseUser.id,
-          email: supabaseUser.email || '',
-          name: supabaseUser.user_metadata?.full_name || 
-                supabaseUser.user_metadata?.name || 
-                'New User',
-          role: supabaseUser.user_metadata?.role || 'user'
-        };
-
-        const { data: newProfile, error: createError } = await supabase
-          .from('user_profiles')
-          .insert(profileData)
-          .select()
-          .single();
-        
-        if (createError) {
-          console.error('Error creating profile:', createError);
-          setUser({
-            id: supabaseUser.id,
-            email: supabaseUser.email || '',
-            name: profileData.name,
-            role: profileData.role as 'admin' | 'owner' | 'user',
-            createdAt: supabaseUser.created_at
-          });
-          return;
-        }
-        
-        if (newProfile) {
-          setUser({
-            id: newProfile.id,
-            email: newProfile.email,
-            name: newProfile.name,
-            role: newProfile.role,
-            avatar: newProfile.avatar_url,
-            createdAt: newProfile.created_at
-          });
-        }
-      } else {
-        setUser({
-          id: profile.id,
-          email: profile.email,
-          name: profile.name,
-          role: profile.role,
-          avatar: profile.avatar_url,
-          createdAt: profile.created_at
-        });
       }
     } catch (error) {
       console.error('Error in loadUserProfile:', error);
+      // Create a fallback user even if there's an error
       setUser({
         id: supabaseUser.id,
         email: supabaseUser.email || '',
@@ -175,14 +136,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
-        console.log('Login successful, loading profile...');
+        console.log('Login successful');
         await loadUserProfile(data.user);
       }
 
       return true;
     } catch (error: any) {
       console.error('Login exception:', error);
-      setError(error.message || 'An unexpected error occurred during login. Please try again.');
+      setError(error.message || 'Login failed. Please try again.');
       return false;
     } finally {
       setIsLoading(false);
@@ -208,8 +169,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
 
-      console.log('Registration response:', data);
-
       if (data.user) {
         if (!data.session) {
           setError('Please check your email to confirm your account before signing in.');
@@ -222,7 +181,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return true;
     } catch (error: any) {
       console.error('Registration exception:', error);
-      setError(error.message || 'An unexpected error occurred during registration. Please try again.');
+      setError(error.message || 'Registration failed. Please try again.');
       return false;
     } finally {
       setIsLoading(false);
