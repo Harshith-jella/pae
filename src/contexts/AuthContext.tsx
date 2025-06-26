@@ -15,6 +15,31 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Demo users for development
+const DEMO_USERS = {
+  'admin@pae.com': {
+    id: '11111111-1111-1111-1111-111111111111',
+    email: 'admin@pae.com',
+    name: 'Admin User',
+    role: 'admin' as const,
+    createdAt: '2024-01-01T00:00:00Z'
+  },
+  'owner@pae.com': {
+    id: '22222222-2222-2222-2222-222222222222',
+    email: 'owner@pae.com',
+    name: 'Space Owner',
+    role: 'owner' as const,
+    createdAt: '2024-01-01T00:00:00Z'
+  },
+  'user@pae.com': {
+    id: '33333333-3333-3333-3333-333333333333',
+    email: 'user@pae.com',
+    name: 'Regular User',
+    role: 'user' as const,
+    createdAt: '2024-01-01T00:00:00Z'
+  }
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -119,6 +144,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     
     try {
+      // Check if this is a demo credential
+      if (DEMO_USERS[email as keyof typeof DEMO_USERS] && password === 'password123') {
+        const demoUser = DEMO_USERS[email as keyof typeof DEMO_USERS];
+        setUser(demoUser);
+        setIsLoading(false);
+        return true;
+      }
+
+      // Try regular Supabase authentication
       const { data, error } = await auth.signIn(email, password);
       
       if (error) {
