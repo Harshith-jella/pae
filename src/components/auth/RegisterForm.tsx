@@ -43,6 +43,12 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleMode }) => {
       return;
     }
     
+    console.log('Registering user with data:', {
+      email: formData.email,
+      name: formData.name,
+      role: formData.role
+    });
+    
     const success = await register(formData.email, formData.password, formData.name, formData.role);
     if (!success && !error) {
       setLocalError('Registration failed. Please try again.');

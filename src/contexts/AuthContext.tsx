@@ -127,13 +127,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     
     try {
+      console.log('Starting registration with:', { email, name, role });
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
-            name,
-            role
+            name: name,
+            role: role,
+            full_name: name
           }
         }
       });
@@ -145,6 +148,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
 
+      console.log('Registration response:', data);
+
       if (data.user) {
         // Check if email confirmation is required
         if (!data.session) {
@@ -154,7 +159,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         
         // If we have a session, the user is automatically signed in
-        await loadUserProfile(data.user);
+        // Wait a bit for the trigger to create the profile
+        setTimeout(async () => {
+          await loadUserProfile(data.user!);
+        }, 1500);
       }
 
       setIsLoading(false);
