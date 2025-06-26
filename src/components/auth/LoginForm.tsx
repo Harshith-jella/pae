@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ParkingCircle, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { ParkingCircle, Mail, Lock, Eye, EyeOff, AlertCircle, Wifi, WifiOff } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { testConnection } from '../../lib/supabase';
 
 interface LoginFormProps {
   onToggleMode: () => void;
@@ -11,7 +12,23 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [localError, setLocalError] = useState('');
+  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
   const { login, isLoading, error } = useAuth();
+
+  // Check connection status on component mount
+  React.useEffect(() => {
+    const checkConnection = async () => {
+      try {
+        const isConnected = await testConnection();
+        setConnectionStatus(isConnected ? 'connected' : 'disconnected');
+      } catch (error) {
+        console.error('Connection check failed:', error);
+        setConnectionStatus('disconnected');
+      }
+    };
+
+    checkConnection();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,10 +43,21 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
       setLocalError('Please enter your password');
       return;
     }
+
+    // Check connection before attempting login
+    if (connectionStatus === 'disconnected') {
+      setLocalError('Unable to connect to the server. Please check your internet connection and try again.');
+      return;
+    }
     
-    const success = await login(email, password);
-    if (!success && !error) {
-      setLocalError('Invalid email or password');
+    try {
+      const success = await login(email, password);
+      if (!success && !error && !localError) {
+        setLocalError('Login failed. Please check your credentials and try again.');
+      }
+    } catch (error) {
+      console.error('Login form error:', error);
+      setLocalError('An unexpected error occurred. Please try again.');
     }
   };
 
@@ -45,6 +73,21 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
     
     setEmail(credentials[role].email);
     setPassword(credentials[role].password);
+    setLocalError(''); // Clear any existing errors
+  };
+
+  const retryConnection = async () => {
+    setConnectionStatus('checking');
+    try {
+      const isConnected = await testConnection();
+      setConnectionStatus(isConnected ? 'connected' : 'disconnected');
+      if (isConnected) {
+        setLocalError('');
+      }
+    } catch (error) {
+      console.error('Retry connection failed:', error);
+      setConnectionStatus('disconnected');
+    }
   };
 
   return (
@@ -57,6 +100,40 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to PAE</h1>
           <p className="text-gray-600">Your premium parking solution</p>
+        </div>
+
+        {/* Connection Status */}
+        <div className={`mb-4 p-3 rounded-lg flex items-center justify-between ${
+          connectionStatus === 'connected' ? 'bg-green-50 border border-green-200' :
+          connectionStatus === 'disconnected' ? 'bg-red-50 border border-red-200' :
+          'bg-yellow-50 border border-yellow-200'
+        }`}>
+          <div className="flex items-center">
+            {connectionStatus === 'connected' ? (
+              <Wifi className="text-green-600 mr-2" size={16} />
+            ) : connectionStatus === 'disconnected' ? (
+              <WifiOff className="text-red-600 mr-2" size={16} />
+            ) : (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600 mr-2"></div>
+            )}
+            <span className={`text-sm font-medium ${
+              connectionStatus === 'connected' ? 'text-green-800' :
+              connectionStatus === 'disconnected' ? 'text-red-800' :
+              'text-yellow-800'
+            }`}>
+              {connectionStatus === 'connected' ? 'Connected to server' :
+               connectionStatus === 'disconnected' ? 'Connection failed' :
+               'Checking connection...'}
+            </span>
+          </div>
+          {connectionStatus === 'disconnected' && (
+            <button
+              onClick={retryConnection}
+              className="text-sm text-red-600 hover:text-red-700 font-medium"
+            >
+              Retry
+            </button>
+          )}
         </div>
 
         {/* Demo Credentials */}
@@ -91,8 +168,16 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
             {displayError && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                {displayError}
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start">
+                <AlertCircle className="mr-2 mt-0.5 flex-shrink-0" size={16} />
+                <div>
+                  {displayError}
+                  {displayError.includes('Database') && (
+                    <div className="mt-2 text-xs text-red-600">
+                      This may be a temporary issue. Please try again in a moment.
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -145,10 +230,19 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || connectionStatus === 'disconnected'}
               className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Signing In...' : 'Sign In'}
+              {isLoading ? (
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                  Signing In...
+                </div>
+              ) : connectionStatus === 'disconnected' ? (
+                'Connection Required'
+              ) : (
+                'Sign In'
+              )}
             </button>
           </form>
 

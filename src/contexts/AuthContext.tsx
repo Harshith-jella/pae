@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User as SupabaseUser } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, auth, testConnection } from '../lib/supabase';
 import { User } from '../types';
 
 interface AuthContextType {
@@ -24,17 +24,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let mounted = true;
 
-    // Get initial session
+    // Test connection and get initial session
     const getInitialSession = async () => {
       try {
+        // Test database connection first
+        const connectionOk = await testConnection();
+        if (!connectionOk) {
+          console.warn('Database connection test failed, but continuing...');
+        }
+
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('Error getting session:', error);
+          if (error.message.includes('Database error')) {
+            setError('Database connection issue. Please refresh the page and try again.');
+          }
         } else if (session?.user && mounted) {
           await loadUserProfile(session.user);
         }
       } catch (error) {
         console.error('Error in getInitialSession:', error);
+        setError('Unable to connect to the authentication service. Please check your internet connection.');
       } finally {
         if (mounted) {
           setLoading(false);
@@ -50,12 +60,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (!mounted) return;
 
-      if (event === 'SIGNED_IN' && session?.user) {
-        await loadUserProfile(session.user);
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
+      try {
+        if (event === 'SIGNED_IN' && session?.user) {
+          await loadUserProfile(session.user);
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setError(null);
+        }
+      } catch (error) {
+        console.error('Error handling auth state change:', error);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => {
@@ -68,7 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Loading user profile for:', supabaseUser.email);
       
-      // Get the profile using service role to bypass RLS
+      // Get the profile
       const { data: profile, error } = await supabase
         .from('user_profiles')
         .select('*')
@@ -166,27 +182,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
+      console.log('Attempting login for:', email);
+      
+      const { data, error } = await auth.signIn(email, password);
       
       if (error) {
         console.error('Login error:', error);
-        setError(error.message);
+        
+        // Handle specific error messages
+        if (error.message.includes('Database error')) {
+          setError('Database connection issue. Please try again in a moment.');
+        } else if (error.message.includes('Invalid login credentials')) {
+          setError('Invalid email or password. Please check your credentials.');
+        } else if (error.message.includes('Email not confirmed')) {
+          setError('Please check your email and confirm your account before signing in.');
+        } else {
+          setError(error.message || 'Login failed. Please try again.');
+        }
         setIsLoading(false);
         return false;
       }
 
       if (data.user) {
+        console.log('Login successful, loading profile...');
         await loadUserProfile(data.user);
       }
 
       setIsLoading(false);
       return true;
-    } catch (error) {
-      console.error('Login error:', error);
-      setError('An unexpected error occurred during login');
+    } catch (error: any) {
+      console.error('Login exception:', error);
+      
+      // Handle network and connection errors
+      if (error.message.includes('fetch')) {
+        setError('Network error. Please check your internet connection and try again.');
+      } else if (error.message.includes('Database connection')) {
+        setError(error.message);
+      } else {
+        setError('An unexpected error occurred during login. Please try again.');
+      }
+      
       setIsLoading(false);
       return false;
     }
@@ -199,21 +234,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Starting registration with:', { email, name, role });
       
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: name,
-            name: name,
-            role: role
-          }
-        }
+      const { data, error } = await auth.signUp(email, password, {
+        full_name: name,
+        name: name,
+        role: role
       });
       
       if (error) {
         console.error('Registration error:', error);
-        setError(error.message);
+        
+        if (error.message.includes('Database error')) {
+          setError('Database connection issue. Please try again in a moment.');
+        } else if (error.message.includes('User already registered')) {
+          setError('An account with this email already exists. Please try signing in instead.');
+        } else {
+          setError(error.message || 'Registration failed. Please try again.');
+        }
         setIsLoading(false);
         return false;
       }
@@ -234,9 +270,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setIsLoading(false);
       return true;
-    } catch (error) {
-      console.error('Registration error:', error);
-      setError('An unexpected error occurred during registration');
+    } catch (error: any) {
+      console.error('Registration exception:', error);
+      
+      if (error.message.includes('fetch')) {
+        setError('Network error. Please check your internet connection and try again.');
+      } else if (error.message.includes('Database connection')) {
+        setError(error.message);
+      } else {
+        setError('An unexpected error occurred during registration. Please try again.');
+      }
+      
       setIsLoading(false);
       return false;
     }
@@ -244,7 +288,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      await supabase.auth.signOut();
+      await auth.signOut();
       setUser(null);
       setError(null);
     } catch (error) {
