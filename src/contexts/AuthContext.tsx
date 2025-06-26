@@ -30,21 +30,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Test database connection first
         const connectionOk = await testConnection();
         if (!connectionOk) {
-          console.warn('Database connection test failed, but continuing...');
+          console.warn('Database connection test failed, but continuing with auth check...');
         }
 
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('Error getting session:', error);
-          if (error.message.includes('Database error')) {
-            setError('Database connection issue. Please refresh the page and try again.');
+          
+          // Handle specific session errors more gracefully
+          if (error.message.includes('Database error') || error.message.includes('schema')) {
+            setError('Authentication service is experiencing issues. Some features may be limited.');
+          } else {
+            setError('Unable to verify your login status. Please try refreshing the page.');
           }
         } else if (session?.user && mounted) {
           await loadUserProfile(session.user);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error in getInitialSession:', error);
-        setError('Unable to connect to the authentication service. Please check your internet connection.');
+        
+        // More specific error handling for initial session
+        if (error.message?.includes('fetch') || error.message?.includes('network')) {
+          setError('Network connection issue. Please check your internet connection.');
+        } else if (error.message?.includes('schema') || error.message?.includes('Database')) {
+          setError('Authentication service is temporarily unavailable. Please try again later.');
+        } else {
+          setError('Unable to connect to the authentication service. Please refresh the page.');
+        }
       } finally {
         if (mounted) {
           setLoading(false);
@@ -69,6 +81,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (error) {
         console.error('Error handling auth state change:', error);
+        // Don't set error state for auth state change issues
+        // as this might be a temporary problem
       } finally {
         setLoading(false);
       }
@@ -188,17 +202,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (error) {
         console.error('Login error:', error);
-        
-        // Handle specific error messages
-        if (error.message.includes('Database error')) {
-          setError('Database connection issue. Please try again in a moment.');
-        } else if (error.message.includes('Invalid login credentials')) {
-          setError('Invalid email or password. Please check your credentials.');
-        } else if (error.message.includes('Email not confirmed')) {
-          setError('Please check your email and confirm your account before signing in.');
-        } else {
-          setError(error.message || 'Login failed. Please try again.');
-        }
+        setError(error.message);
         setIsLoading(false);
         return false;
       }
@@ -213,14 +217,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error('Login exception:', error);
       
-      // Handle network and connection errors
-      if (error.message.includes('fetch')) {
-        setError('Network error. Please check your internet connection and try again.');
-      } else if (error.message.includes('Database connection')) {
-        setError(error.message);
-      } else {
-        setError('An unexpected error occurred during login. Please try again.');
-      }
+      // The error message from auth.signIn is already user-friendly
+      setError(error.message || 'An unexpected error occurred during login. Please try again.');
       
       setIsLoading(false);
       return false;
@@ -242,14 +240,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (error) {
         console.error('Registration error:', error);
-        
-        if (error.message.includes('Database error')) {
-          setError('Database connection issue. Please try again in a moment.');
-        } else if (error.message.includes('User already registered')) {
-          setError('An account with this email already exists. Please try signing in instead.');
-        } else {
-          setError(error.message || 'Registration failed. Please try again.');
-        }
+        setError(error.message);
         setIsLoading(false);
         return false;
       }
@@ -273,13 +264,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error: any) {
       console.error('Registration exception:', error);
       
-      if (error.message.includes('fetch')) {
-        setError('Network error. Please check your internet connection and try again.');
-      } else if (error.message.includes('Database connection')) {
-        setError(error.message);
-      } else {
-        setError('An unexpected error occurred during registration. Please try again.');
-      }
+      // The error message from auth.signUp is already user-friendly
+      setError(error.message || 'An unexpected error occurred during registration. Please try again.');
       
       setIsLoading(false);
       return false;
@@ -293,6 +279,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setError(null);
     } catch (error) {
       console.error('Logout error:', error);
+      // Don't show logout errors to user - just clear the state
+      setUser(null);
+      setError(null);
     }
   };
 

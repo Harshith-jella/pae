@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ParkingCircle, Mail, Lock, Eye, EyeOff, AlertCircle, Wifi, WifiOff } from 'lucide-react';
+import { ParkingCircle, Mail, Lock, Eye, EyeOff, AlertCircle, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { testConnection } from '../../lib/supabase';
 
@@ -43,12 +43,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
       setLocalError('Please enter your password');
       return;
     }
-
-    // Check connection before attempting login
-    if (connectionStatus === 'disconnected') {
-      setLocalError('Unable to connect to the server. Please check your internet connection and try again.');
-      return;
-    }
     
     try {
       const success = await login(email, password);
@@ -90,6 +84,15 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
     }
   };
 
+  // Determine if we should show a server issue warning
+  const showServerWarning = displayError && (
+    displayError.includes('technical difficulties') ||
+    displayError.includes('server error') ||
+    displayError.includes('temporarily unavailable') ||
+    displayError.includes('configuration issue') ||
+    displayError.includes('unexpected error')
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
@@ -101,6 +104,24 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to PAE</h1>
           <p className="text-gray-600">Your premium parking solution</p>
         </div>
+
+        {/* Server Status Warning */}
+        {showServerWarning && (
+          <div className="mb-4 p-4 rounded-lg bg-amber-50 border border-amber-200">
+            <div className="flex items-start">
+              <AlertTriangle className="text-amber-600 mr-3 mt-0.5 flex-shrink-0" size={20} />
+              <div>
+                <h3 className="text-sm font-semibold text-amber-800 mb-1">Server Issue Detected</h3>
+                <p className="text-sm text-amber-700 mb-2">
+                  The authentication service is experiencing technical difficulties. This appears to be a temporary server-side issue.
+                </p>
+                <p className="text-xs text-amber-600">
+                  Please try again in a few minutes. If the problem persists, contact support.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Connection Status */}
         <div className={`mb-4 p-3 rounded-lg flex items-center justify-between ${
@@ -122,7 +143,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
               'text-yellow-800'
             }`}>
               {connectionStatus === 'connected' ? 'Connected to server' :
-               connectionStatus === 'disconnected' ? 'Connection failed' :
+               connectionStatus === 'disconnected' ? 'Connection issues detected' :
                'Checking connection...'}
             </span>
           </div>
@@ -167,16 +188,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
         {/* Login Form */}
         <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {displayError && (
+            {displayError && !showServerWarning && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start">
                 <AlertCircle className="mr-2 mt-0.5 flex-shrink-0" size={16} />
                 <div>
                   {displayError}
-                  {displayError.includes('Database') && (
-                    <div className="mt-2 text-xs text-red-600">
-                      This may be a temporary issue. Please try again in a moment.
-                    </div>
-                  )}
                 </div>
               </div>
             )}
@@ -230,7 +246,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
 
             <button
               type="submit"
-              disabled={isLoading || connectionStatus === 'disconnected'}
+              disabled={isLoading}
               className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? (
@@ -238,8 +254,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleMode }) => {
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
                   Signing In...
                 </div>
-              ) : connectionStatus === 'disconnected' ? (
-                'Connection Required'
               ) : (
                 'Sign In'
               )}

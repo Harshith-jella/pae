@@ -25,23 +25,50 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
-// Test connection function
+// Enhanced test connection function with better error handling
 export const testConnection = async () => {
   try {
+    // First try a simple health check
     const { data, error } = await supabase.from('user_profiles').select('count').limit(1);
     if (error) {
       console.error('Connection test failed:', error);
+      
+      // Check if it's a schema-related error
+      if (error.message.includes('schema') || error.message.includes('relation') || error.message.includes('does not exist')) {
+        console.error('Database schema issue detected');
+        return false;
+      }
+      
+      // Check if it's a permission error (which might indicate the connection is working but RLS is blocking)
+      if (error.message.includes('permission') || error.message.includes('policy')) {
+        console.log('Connection working but RLS policies may be blocking - this is expected');
+        return true;
+      }
+      
       return false;
     }
     console.log('Supabase connection successful');
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Connection test error:', error);
+    
+    // Network or fetch errors
+    if (error.message?.includes('fetch') || error.message?.includes('network')) {
+      console.error('Network connectivity issue');
+      return false;
+    }
+    
+    // Server errors (500, 502, etc.)
+    if (error.status >= 500) {
+      console.error('Server error detected:', error.status);
+      return false;
+    }
+    
     return false;
   }
 };
 
-// Auth helpers with better error handling
+// Enhanced auth helpers with comprehensive error handling
 export const auth = {
   signUp: async (email: string, password: string, metadata: any = {}) => {
     try {
@@ -55,21 +82,52 @@ export const auth = {
       
       if (result.error) {
         console.error('SignUp error:', result.error);
+        
+        // Handle specific Supabase auth errors
+        if (result.error.message.includes('Database error')) {
+          throw new Error('The authentication service is temporarily unavailable. Please try again later.');
+        }
+        
+        if (result.error.message.includes('schema')) {
+          throw new Error('There is a configuration issue with the authentication service. Please contact support.');
+        }
+        
+        if (result.error.message.includes('User already registered')) {
+          throw new Error('An account with this email already exists. Please try signing in instead.');
+        }
+        
+        // Pass through the original error for other cases
+        throw new Error(result.error.message);
       }
       
       return result;
-    } catch (error) {
+    } catch (error: any) {
       console.error('SignUp exception:', error);
-      throw error;
+      
+      // If it's already a handled error, re-throw it
+      if (error.message.includes('authentication service') || 
+          error.message.includes('configuration issue') ||
+          error.message.includes('already exists')) {
+        throw error;
+      }
+      
+      // Handle network errors
+      if (error.message?.includes('fetch') || error.message?.includes('Failed to fetch')) {
+        throw new Error('Network error. Please check your internet connection and try again.');
+      }
+      
+      // Generic fallback
+      throw new Error('Registration failed due to a server error. Please try again later.');
     }
   },
 
   signIn: async (email: string, password: string) => {
     try {
-      // Test connection first
+      // Test connection first with a more lenient approach
       const connectionOk = await testConnection();
       if (!connectionOk) {
-        throw new Error('Unable to connect to database. Please check your internet connection and try again.');
+        // Don't immediately fail - the auth endpoint might still work
+        console.warn('Connection test failed, but attempting authentication anyway...');
       }
 
       const result = await supabase.auth.signInWithPassword({
@@ -80,19 +138,61 @@ export const auth = {
       if (result.error) {
         console.error('SignIn error:', result.error);
         
-        // Handle specific error cases
+        // Handle specific error cases with more user-friendly messages
+        if (result.error.message.includes('Database error querying schema')) {
+          throw new Error('The authentication service is experiencing technical difficulties. This appears to be a temporary server issue. Please try again in a few minutes, or contact support if the problem persists.');
+        }
+        
         if (result.error.message.includes('Database error')) {
-          throw new Error('Database connection issue. Please try again in a moment.');
+          throw new Error('Authentication service is temporarily unavailable. Please try again in a moment.');
         }
+        
         if (result.error.message.includes('Invalid login credentials')) {
-          throw new Error('Invalid email or password. Please check your credentials.');
+          throw new Error('Invalid email or password. Please check your credentials and try again.');
         }
+        
+        if (result.error.message.includes('Email not confirmed')) {
+          throw new Error('Please check your email and confirm your account before signing in.');
+        }
+        
+        if (result.error.message.includes('schema')) {
+          throw new Error('There is a configuration issue with the authentication service. Please contact support.');
+        }
+        
+        // For unexpected_failure or other server errors
+        if (result.error.message.includes('unexpected_failure')) {
+          throw new Error('The server encountered an unexpected error. This is likely a temporary issue - please try again in a few minutes.');
+        }
+        
+        // Pass through the original error message for other cases
+        throw new Error(result.error.message);
       }
       
       return result;
-    } catch (error) {
+    } catch (error: any) {
       console.error('SignIn exception:', error);
-      throw error;
+      
+      // If it's already a handled error with a user-friendly message, re-throw it
+      if (error.message.includes('authentication service') || 
+          error.message.includes('technical difficulties') ||
+          error.message.includes('Invalid email') ||
+          error.message.includes('configuration issue') ||
+          error.message.includes('unexpected error')) {
+        throw error;
+      }
+      
+      // Handle network errors
+      if (error.message?.includes('fetch') || error.message?.includes('Failed to fetch')) {
+        throw new Error('Network error. Please check your internet connection and try again.');
+      }
+      
+      // Handle timeout errors
+      if (error.message?.includes('timeout')) {
+        throw new Error('The request timed out. Please check your connection and try again.');
+      }
+      
+      // Generic fallback for unexpected errors
+      throw new Error('Login failed due to a server error. Please try again later.');
     }
   },
 
@@ -101,7 +201,8 @@ export const auth = {
       return await supabase.auth.signOut();
     } catch (error) {
       console.error('SignOut error:', error);
-      throw error;
+      // Don't throw on logout errors - just log them
+      return { error: null };
     }
   },
 
