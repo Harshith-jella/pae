@@ -1,14 +1,23 @@
 import React, { useState } from 'react';
 import { User, Mail, Phone, MapPin, Calendar, Camera, Edit3, Save, X, Shield, CreditCard, Bell } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
 
 export const ProfilePage: React.FC = () => {
-  const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState('personal');
+  
+  // Mock user data
+  const mockUser = {
+    id: '1',
+    name: 'Demo User',
+    email: 'demo@pae.com',
+    role: 'user' as const,
+    avatar: 'https://images.pexels.com/photos/415829/pexels-photo-415829.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&dpr=1',
+    createdAt: '2024-01-01T00:00:00Z'
+  };
+
   const [formData, setFormData] = useState({
-    name: user?.name || '',
-    email: user?.email || '',
+    name: mockUser?.name || '',
+    email: mockUser?.email || '',
     phone: '+1 (555) 123-4567',
     address: '123 Main Street, San Francisco, CA 94105',
     bio: 'Passionate about finding great parking solutions in the city.',
@@ -40,10 +49,10 @@ export const ProfilePage: React.FC = () => {
         <div className="px-8 pb-8">
           <div className="flex flex-col sm:flex-row sm:items-end sm:space-x-6 -mt-16">
             <div className="relative">
-              {user?.avatar ? (
+              {mockUser?.avatar ? (
                 <img 
-                  src={user.avatar} 
-                  alt={user.name}
+                  src={mockUser.avatar} 
+                  alt={mockUser.name}
                   className="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover"
                 />
               ) : (
@@ -58,14 +67,14 @@ export const ProfilePage: React.FC = () => {
             <div className="mt-4 sm:mt-0 flex-1">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h1 className="text-3xl font-bold text-gray-900">{user?.name}</h1>
-                  <p className="text-gray-600 mt-1">{user?.email}</p>
+                  <h1 className="text-3xl font-bold text-gray-900">{mockUser?.name}</h1>
+                  <p className="text-gray-600 mt-1">{mockUser?.email}</p>
                   <div className="flex items-center space-x-4 mt-2">
                     <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium capitalize">
-                      {user?.role} Account
+                      {mockUser?.role} Account
                     </span>
                     <span className="text-sm text-gray-500">
-                      Member since {new Date(user?.createdAt || '').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                      Member since {new Date(mockUser?.createdAt || '').toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                     </span>
                   </div>
                 </div>

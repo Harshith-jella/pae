@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { Calendar, MapPin, Clock, CreditCard, CheckCircle, XCircle, AlertCircle, Star } from 'lucide-react';
 import { mockBookings, mockParkingSpaces } from '../../data/mockData';
-import { useAuth } from '../../contexts/AuthContext';
 
 export const MyBookings: React.FC = () => {
-  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past' | 'pending'>('upcoming');
 
-  const userBookings = mockBookings.filter(booking => booking.userId === user?.id);
+  // Mock user ID for demo
+  const userId = '3';
+  const userBookings = mockBookings.filter(booking => booking.userId === userId);
 
   const getBookingsByStatus = () => {
     const now = new Date();

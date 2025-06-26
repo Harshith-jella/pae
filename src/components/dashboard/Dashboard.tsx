@@ -1,17 +1,17 @@
 import React from 'react';
 import { DollarSign, Calendar, ParkingCircle, Users, TrendingUp, Clock } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
 import { DashboardCard } from '../common/DashboardCard';
 import { Chart } from '../common/Chart';
 import { mockDashboardStats, mockBookings } from '../../data/mockData';
 
 export const Dashboard: React.FC = () => {
-  const { user } = useAuth();
+  // Get user role from URL params or default to 'user'
+  const userRole = new URLSearchParams(window.location.search).get('role') || 'user';
   
   const getDashboardData = () => {
     const stats = mockDashboardStats;
     
-    switch (user?.role) {
+    switch (userRole) {
       case 'admin':
         return {
           cards: [
@@ -113,7 +113,7 @@ export const Dashboard: React.FC = () => {
         };
         
       default: // user
-        const userBookings = mockBookings.filter(b => b.userId === user?.id);
+        const userBookings = mockBookings.filter(b => b.userId === '3');
         return {
           cards: [
             {
@@ -176,10 +176,10 @@ export const Dashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">
-            Welcome back, {user?.name}!
+            Welcome to PAE Dashboard!
           </h1>
           <p className="text-gray-600 mt-1">
-            Here's what's happening with your {user?.role === 'admin' ? 'platform' : user?.role === 'owner' ? 'spaces' : 'bookings'} today.
+            Here's what's happening with your {userRole === 'admin' ? 'platform' : userRole === 'owner' ? 'spaces' : 'bookings'} today.
           </p>
         </div>
         <div className="mt-4 sm:mt-0">
@@ -212,7 +212,7 @@ export const Dashboard: React.FC = () => {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
         <div className="space-y-4">
-          {user?.role === 'admin' ? (
+          {userRole === 'admin' ? (
             <>
               <div className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg">
                 <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
@@ -230,7 +230,7 @@ export const Dashboard: React.FC = () => {
                 <span className="text-xs text-gray-500 ml-auto">6 hours ago</span>
               </div>
             </>
-          ) : user?.role === 'owner' ? (
+          ) : userRole === 'owner' ? (
             <>
               <div className="flex items-center space-x-3 p-3 bg-green-50 rounded-lg">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
