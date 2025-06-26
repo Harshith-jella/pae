@@ -24,31 +24,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let mounted = true;
 
-    const getInitialSession = async () => {
+    const initializeAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase.auth.getSession();
         
-        if (error) {
-          console.error('Error getting session:', error);
-          setError('Unable to verify your login status.');
-        } else if (session?.user && mounted) {
-          await loadUserProfile(session.user);
+        if (mounted) {
+          if (session?.user) {
+            await loadUserProfile(session.user);
+          }
+          setLoading(false);
         }
-      } catch (error: any) {
-        console.error('Error in getInitialSession:', error);
-        setError('Unable to connect to the authentication service.');
-      } finally {
+      } catch (error) {
+        console.error('Error initializing auth:', error);
         if (mounted) {
           setLoading(false);
         }
       }
     };
 
-    getInitialSession();
+    initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event);
-      
       if (!mounted) return;
 
       try {
@@ -60,10 +56,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (error) {
         console.error('Error handling auth state change:', error);
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+      }
+      
+      if (mounted) {
+        setLoading(false);
       }
     });
 
@@ -75,14 +71,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loadUserProfile = async (supabaseUser: SupabaseUser) => {
     try {
-      console.log('Loading user profile for:', supabaseUser.email);
-      
-      // Try to get the profile, but don't fail if it doesn't exist
+      // Try to get the profile from the database
       const { data: profile } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('id', supabaseUser.id)
-        .maybeSingle();
+        .single();
 
       if (profile) {
         setUser({
@@ -106,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
     } catch (error) {
-      console.error('Error in loadUserProfile:', error);
+      console.error('Error loading user profile:', error);
       // Create a fallback user even if there's an error
       setUser({
         id: supabaseUser.id,
@@ -125,24 +119,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     
     try {
-      console.log('Attempting login for:', email);
-      
       const { data, error } = await auth.signIn(email, password);
       
       if (error) {
-        console.error('Login error:', error);
         setError(error.message);
         return false;
       }
 
       if (data.user) {
-        console.log('Login successful');
         await loadUserProfile(data.user);
       }
 
       return true;
     } catch (error: any) {
-      console.error('Login exception:', error);
+      console.error('Login error:', error);
       setError(error.message || 'Login failed. Please try again.');
       return false;
     } finally {
@@ -155,8 +145,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setError(null);
     
     try {
-      console.log('Starting registration with:', { email, name, role });
-      
       const { data, error } = await auth.signUp(email, password, {
         full_name: name,
         name: name,
@@ -164,7 +152,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       
       if (error) {
-        console.error('Registration error:', error);
         setError(error.message);
         return false;
       }
@@ -180,7 +167,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return true;
     } catch (error: any) {
-      console.error('Registration exception:', error);
+      console.error('Registration error:', error);
       setError(error.message || 'Registration failed. Please try again.');
       return false;
     } finally {
