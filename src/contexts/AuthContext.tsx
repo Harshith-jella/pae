@@ -92,66 +92,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .from('user_profiles')
         .select('*')
         .eq('id', supabaseUser.id)
-        .single();
+        .maybeSingle();
       
       if (error) {
         console.error('Error loading user profile:', error);
-        
-        if (error.code === 'PGRST116') {
-          console.log('Profile not found, creating...');
-          
-          const profileData = {
-            id: supabaseUser.id,
-            email: supabaseUser.email || '',
-            name: supabaseUser.user_metadata?.full_name || 
-                  supabaseUser.user_metadata?.name || 
-                  'New User',
-            role: supabaseUser.user_metadata?.role || 'user'
-          };
-
-          const { data: newProfile, error: createError } = await supabase
-            .from('user_profiles')
-            .insert(profileData)
-            .select()
-            .single();
-          
-          if (createError) {
-            console.error('Error creating profile:', createError);
-            setUser({
-              id: supabaseUser.id,
-              email: supabaseUser.email || '',
-              name: profileData.name,
-              role: profileData.role as 'admin' | 'owner' | 'user',
-              createdAt: supabaseUser.created_at
-            });
-            return;
-          }
-          
-          if (newProfile) {
-            setUser({
-              id: newProfile.id,
-              email: newProfile.email,
-              name: newProfile.name,
-              role: newProfile.role,
-              avatar: newProfile.avatar_url,
-              createdAt: newProfile.created_at
-            });
-          }
-        } else {
-          setUser({
-            id: supabaseUser.id,
-            email: supabaseUser.email || '',
-            name: supabaseUser.user_metadata?.full_name || 
-                  supabaseUser.user_metadata?.name || 
-                  'User',
-            role: (supabaseUser.user_metadata?.role as 'admin' | 'owner' | 'user') || 'user',
-            createdAt: supabaseUser.created_at
-          });
-        }
+        setUser({
+          id: supabaseUser.id,
+          email: supabaseUser.email || '',
+          name: supabaseUser.user_metadata?.full_name || 
+                supabaseUser.user_metadata?.name || 
+                'User',
+          role: (supabaseUser.user_metadata?.role as 'admin' | 'owner' | 'user') || 'user',
+          createdAt: supabaseUser.created_at
+        });
         return;
       }
 
-      if (profile) {
+      if (!profile) {
+        console.log('Profile not found, creating...');
+        
+        const profileData = {
+          id: supabaseUser.id,
+          email: supabaseUser.email || '',
+          name: supabaseUser.user_metadata?.full_name || 
+                supabaseUser.user_metadata?.name || 
+                'New User',
+          role: supabaseUser.user_metadata?.role || 'user'
+        };
+
+        const { data: newProfile, error: createError } = await supabase
+          .from('user_profiles')
+          .insert(profileData)
+          .select()
+          .single();
+        
+        if (createError) {
+          console.error('Error creating profile:', createError);
+          setUser({
+            id: supabaseUser.id,
+            email: supabaseUser.email || '',
+            name: profileData.name,
+            role: profileData.role as 'admin' | 'owner' | 'user',
+            createdAt: supabaseUser.created_at
+          });
+          return;
+        }
+        
+        if (newProfile) {
+          setUser({
+            id: newProfile.id,
+            email: newProfile.email,
+            name: newProfile.name,
+            role: newProfile.role,
+            avatar: newProfile.avatar_url,
+            createdAt: newProfile.created_at
+          });
+        }
+      } else {
         setUser({
           id: profile.id,
           email: profile.email,
