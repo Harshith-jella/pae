@@ -98,83 +98,84 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       console.log('Loading user profile for:', supabaseUser.email);
       
-      // Get the profile - use maybeSingle() to avoid errors when no profile exists
+      // Get the profile
       const { data: profile, error } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('id', supabaseUser.id)
-        .maybeSingle();
+        .single();
       
       if (error) {
         console.error('Error loading user profile:', error);
-        // For database errors, fall back to using auth user data
-        console.log('Using fallback user data due to profile error');
-        setUser({
-          id: supabaseUser.id,
-          email: supabaseUser.email || '',
-          name: supabaseUser.user_metadata?.full_name || 
-                supabaseUser.user_metadata?.name || 
-                'User',
-          role: (supabaseUser.user_metadata?.role as 'admin' | 'owner' | 'user') || 'user',
-          createdAt: supabaseUser.created_at
-        });
-        return;
-      }
-
-      // If no profile exists, create one
-      if (!profile) {
-        console.log('Profile not found, creating...');
         
-        const profileData = {
-          id: supabaseUser.id,
-          email: supabaseUser.email || '',
-          name: supabaseUser.user_metadata?.full_name || 
-                supabaseUser.user_metadata?.name || 
-                'New User',
-          role: supabaseUser.user_metadata?.role || 'user'
-        };
+        // If profile doesn't exist, create it
+        if (error.code === 'PGRST116') {
+          console.log('Profile not found, creating...');
+          
+          const profileData = {
+            id: supabaseUser.id,
+            email: supabaseUser.email || '',
+            name: supabaseUser.user_metadata?.full_name || 
+                  supabaseUser.user_metadata?.name || 
+                  'New User',
+            role: supabaseUser.user_metadata?.role || 'user'
+          };
 
-        const { data: newProfile, error: createError } = await supabase
-          .from('user_profiles')
-          .insert(profileData)
-          .select()
-          .single();
-        
-        if (createError) {
-          console.error('Error creating profile:', createError);
-          // Fall back to using auth user data
+          const { data: newProfile, error: createError } = await supabase
+            .from('user_profiles')
+            .insert(profileData)
+            .select()
+            .single();
+          
+          if (createError) {
+            console.error('Error creating profile:', createError);
+            // Fall back to using auth user data
+            setUser({
+              id: supabaseUser.id,
+              email: supabaseUser.email || '',
+              name: profileData.name,
+              role: profileData.role as 'admin' | 'owner' | 'user',
+              createdAt: supabaseUser.created_at
+            });
+            return;
+          }
+          
+          if (newProfile) {
+            setUser({
+              id: newProfile.id,
+              email: newProfile.email,
+              name: newProfile.name,
+              role: newProfile.role,
+              avatar: newProfile.avatar_url,
+              createdAt: newProfile.created_at
+            });
+          }
+        } else {
+          // For other errors, fall back to auth user data
+          console.log('Using fallback user data due to profile error');
           setUser({
             id: supabaseUser.id,
             email: supabaseUser.email || '',
-            name: profileData.name,
-            role: profileData.role as 'admin' | 'owner' | 'user',
+            name: supabaseUser.user_metadata?.full_name || 
+                  supabaseUser.user_metadata?.name || 
+                  'User',
+            role: (supabaseUser.user_metadata?.role as 'admin' | 'owner' | 'user') || 'user',
             createdAt: supabaseUser.created_at
-          });
-          return;
-        }
-        
-        if (newProfile) {
-          setUser({
-            id: newProfile.id,
-            email: newProfile.email,
-            name: newProfile.name,
-            role: newProfile.role,
-            avatar: newProfile.avatar_url,
-            createdAt: newProfile.created_at
           });
         }
         return;
       }
 
-      // Profile exists, use it
-      setUser({
-        id: profile.id,
-        email: profile.email,
-        name: profile.name,
-        role: profile.role,
-        avatar: profile.avatar_url,
-        createdAt: profile.created_at
-      });
+      if (profile) {
+        setUser({
+          id: profile.id,
+          email: profile.email,
+          name: profile.name,
+          role: profile.role,
+          avatar: profile.avatar_url,
+          createdAt: profile.created_at
+        });
+      }
     } catch (error) {
       console.error('Error in loadUserProfile:', error);
       // Fall back to using auth user data
