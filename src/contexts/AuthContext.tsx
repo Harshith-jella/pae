@@ -22,19 +22,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let mounted = true;
+
     // Get initial session
     const getInitialSession = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error) {
           console.error('Error getting session:', error);
-        } else if (session?.user) {
+        } else if (session?.user && mounted) {
           await loadUserProfile(session.user);
         }
       } catch (error) {
         console.error('Error in getInitialSession:', error);
       } finally {
-        setLoading(false);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
@@ -44,6 +48,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event, session?.user?.email);
       
+      if (!mounted) return;
+
       if (event === 'SIGNED_IN' && session?.user) {
         await loadUserProfile(session.user);
       } else if (event === 'SIGNED_OUT') {
@@ -52,14 +58,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const loadUserProfile = async (supabaseUser: SupabaseUser) => {
     try {
-      // Wait a bit for the trigger to create the profile
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log('Loading user profile for:', supabaseUser.email);
       
+      // First, try to get the profile
       const { data: profile, error } = await supabase
         .from('user_profiles')
         .select('*')
@@ -69,23 +78,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) {
         console.error('Error loading user profile:', error);
         
-        // If profile doesn't exist, try to create it manually
+        // If profile doesn't exist, create it
         if (error.code === 'PGRST116') {
-          console.log('Profile not found, creating manually...');
+          console.log('Profile not found, creating...');
           
+          const profileData = {
+            id: supabaseUser.id,
+            email: supabaseUser.email || '',
+            name: supabaseUser.user_metadata?.full_name || 
+                  supabaseUser.user_metadata?.name || 
+                  'New User',
+            role: supabaseUser.user_metadata?.role || 'user'
+          };
+
           const { data: newProfile, error: createError } = await supabase
             .from('user_profiles')
-            .insert({
-              id: supabaseUser.id,
-              email: supabaseUser.email || '',
-              name: supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || 'New User',
-              role: supabaseUser.user_metadata?.role || 'user'
-            })
+            .insert(profileData)
             .select()
             .single();
           
           if (createError) {
-            console.error('Error creating profile manually:', createError);
+            console.error('Error creating profile:', createError);
+            // Fall back to using auth user data
+            setUser({
+              id: supabaseUser.id,
+              email: supabaseUser.email || '',
+              name: profileData.name,
+              role: profileData.role as 'admin' | 'owner' | 'user',
+              createdAt: supabaseUser.created_at
+            });
             return;
           }
           
@@ -99,6 +120,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               createdAt: newProfile.created_at
             });
           }
+        } else {
+          // For other errors (like RLS issues), fall back to auth user data
+          console.log('Using fallback user data due to profile error');
+          setUser({
+            id: supabaseUser.id,
+            email: supabaseUser.email || '',
+            name: supabaseUser.user_metadata?.full_name || 
+                  supabaseUser.user_metadata?.name || 
+                  'User',
+            role: (supabaseUser.user_metadata?.role as 'admin' | 'owner' | 'user') || 'user',
+            createdAt: supabaseUser.created_at
+          });
         }
         return;
       }
@@ -114,7 +147,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
     } catch (error) {
-      console.error('Error loading user profile:', error);
+      console.error('Error in loadUserProfile:', error);
+      // Fall back to using auth user data
+      setUser({
+        id: supabaseUser.id,
+        email: supabaseUser.email || '',
+        name: supabaseUser.user_metadata?.full_name || 
+              supabaseUser.user_metadata?.name || 
+              'User',
+        role: (supabaseUser.user_metadata?.role as 'admin' | 'owner' | 'user') || 'user',
+        createdAt: supabaseUser.created_at
+      });
     }
   };
 
@@ -162,6 +205,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         options: {
           data: {
             full_name: name,
+            name: name,
             role: role
           }
         }
@@ -185,10 +229,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         
         // If we have a session, the user is automatically signed in
-        // Wait for the trigger to create the profile
-        setTimeout(async () => {
-          await loadUserProfile(data.user!);
-        }, 2000);
+        await loadUserProfile(data.user);
       }
 
       setIsLoading(false);
