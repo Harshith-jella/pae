@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { Calendar, MapPin, Clock, CreditCard, CheckCircle, XCircle, AlertCircle, Star } from 'lucide-react';
-import { mockBookings, mockParkingSpaces } from '../../data/mockData';
+import { useUserBookings } from '../../hooks/useSupabaseData';
 import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 export const MyBookings: React.FC = () => {
   const { user } = useAuth();
+  const { bookings, loading, error } = useUserBookings(user?.id || '');
   const [activeTab, setActiveTab] = useState<'upcoming' | 'past' | 'pending'>('upcoming');
-
-  const userBookings = mockBookings.filter(booking => booking.userId === user?.id);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const getBookingsByStatus = () => {
     const now = new Date();
@@ -15,19 +16,38 @@ export const MyBookings: React.FC = () => {
     
     switch (activeTab) {
       case 'upcoming':
-        return userBookings.filter(booking => 
+        return bookings.filter(booking => 
           booking.status === 'confirmed' && booking.startDate >= today
         );
       case 'past':
-        return userBookings.filter(booking => 
+        return bookings.filter(booking => 
           booking.status === 'completed' || booking.startDate < today
         );
       case 'pending':
-        return userBookings.filter(booking => 
+        return bookings.filter(booking => 
           booking.status === 'pending'
         );
       default:
         return [];
+    }
+  };
+
+  const handleCancelBooking = async (bookingId: string) => {
+    setActionLoading(bookingId);
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({ status: 'cancelled' })
+        .eq('id', bookingId);
+
+      if (error) throw error;
+      
+      // Refresh the page to show updated data
+      window.location.reload();
+    } catch (error: any) {
+      alert('Error cancelling booking: ' + error.message);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -80,6 +100,23 @@ export const MyBookings: React.FC = () => {
 
   const filteredBookings = getBookingsByStatus();
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-2 text-gray-600">Loading bookings...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+        Error loading bookings: {error}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -95,9 +132,9 @@ export const MyBookings: React.FC = () => {
         <div className="border-b border-gray-200">
           <nav className="flex space-x-8 px-6">
             {[
-              { id: 'upcoming', label: 'Upcoming', count: userBookings.filter(b => b.status === 'confirmed').length },
-              { id: 'pending', label: 'Pending', count: userBookings.filter(b => b.status === 'pending').length },
-              { id: 'past', label: 'Past', count: userBookings.filter(b => b.status === 'completed').length }
+              { id: 'upcoming', label: 'Upcoming', count: bookings.filter(b => b.status === 'confirmed').length },
+              { id: 'pending', label: 'Pending', count: bookings.filter(b => b.status === 'pending').length },
+              { id: 'past', label: 'Past', count: bookings.filter(b => b.status === 'completed').length }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -136,90 +173,86 @@ export const MyBookings: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {filteredBookings.map((booking) => {
-                const space = mockParkingSpaces.find(s => s.id === booking.spaceId);
-                if (!space) return null;
-
-                return (
-                  <div key={booking.id} className="border border-gray-200 rounded-lg p-6 hover:shadow-sm transition-shadow duration-200">
-                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-start justify-between mb-3">
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-900">{space.title}</h3>
-                            <div className="flex items-center space-x-2 text-gray-600 mt-1">
-                              <MapPin size={16} />
-                              <span className="text-sm">{space.address}, {space.city}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            {getStatusIcon(booking.status)}
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
-                              {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                            </span>
+              {filteredBookings.map((booking) => (
+                <div key={booking.id} className="border border-gray-200 rounded-lg p-6 hover:shadow-sm transition-shadow duration-200">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">Parking Space Booking</h3>
+                          <div className="flex items-center space-x-2 text-gray-600 mt-1">
+                            <MapPin size={16} />
+                            <span className="text-sm">Booking ID: {booking.id.slice(0, 8)}</span>
                           </div>
                         </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                          <div className="flex items-center space-x-2 text-gray-600">
-                            <Calendar size={16} />
-                            <span className="text-sm">
-                              {formatDate(booking.startDate)}
-                              {booking.startDate !== booking.endDate && ` - ${formatDate(booking.endDate)}`}
-                            </span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-gray-600">
-                            <Clock size={16} />
-                            <span className="text-sm">
-                              {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
-                            </span>
-                          </div>
-                          <div className="flex items-center space-x-2 text-gray-600">
-                            <CreditCard size={16} />
-                            <span className="text-sm font-semibold text-green-600">
-                              ${booking.totalAmount}
-                            </span>
-                          </div>
+                        <div className="flex items-center space-x-2">
+                          {getStatusIcon(booking.status)}
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(booking.status)}`}>
+                            {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
+                          </span>
                         </div>
-
-                        {booking.isRecurring && booking.recurringDays && (
-                          <div className="mb-3">
-                            <span className="text-sm text-gray-600">
-                              Recurring: {booking.recurringDays.join(', ')}
-                            </span>
-                          </div>
-                        )}
                       </div>
 
-                      <div className="mt-4 lg:mt-0 lg:ml-6 flex flex-col sm:flex-row gap-2">
-                        {booking.status === 'pending' && (
-                          <>
-                            <button className="px-4 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors duration-200">
-                              Cancel
-                            </button>
-                          </>
-                        )}
-                        {booking.status === 'confirmed' && (
-                          <>
-                            <button className="px-4 py-2 text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 transition-colors duration-200">
-                              Modify
-                            </button>
-                            <button className="px-4 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors duration-200">
-                              Cancel
-                            </button>
-                          </>
-                        )}
-                        {booking.status === 'completed' && (
-                          <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2">
-                            <Star size={16} />
-                            <span>Rate & Review</span>
-                          </button>
-                        )}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div className="flex items-center space-x-2 text-gray-600">
+                          <Calendar size={16} />
+                          <span className="text-sm">
+                            {formatDate(booking.startDate)}
+                            {booking.startDate !== booking.endDate && ` - ${formatDate(booking.endDate)}`}
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-2 text-gray-600">
+                          <Clock size={16} />
+                          <span className="text-sm">
+                            {formatTime(booking.startTime)} - {formatTime(booking.endTime)}
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-2 text-gray-600">
+                          <CreditCard size={16} />
+                          <span className="text-sm font-semibold text-green-600">
+                            ${booking.totalAmount}
+                          </span>
+                        </div>
                       </div>
+
+                      {booking.isRecurring && booking.recurringDays && (
+                        <div className="mb-3">
+                          <span className="text-sm text-gray-600">
+                            Recurring: {booking.recurringDays.join(', ')}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-4 lg:mt-0 lg:ml-6 flex flex-col sm:flex-row gap-2">
+                      {booking.status === 'pending' && (
+                        <button 
+                          onClick={() => handleCancelBooking(booking.id)}
+                          disabled={actionLoading === booking.id}
+                          className="px-4 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors duration-200 disabled:opacity-50"
+                        >
+                          {actionLoading === booking.id ? 'Cancelling...' : 'Cancel'}
+                        </button>
+                      )}
+                      {booking.status === 'confirmed' && (
+                        <button 
+                          onClick={() => handleCancelBooking(booking.id)}
+                          disabled={actionLoading === booking.id}
+                          className="px-4 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors duration-200 disabled:opacity-50"
+                        >
+                          {actionLoading === booking.id ? 'Cancelling...' : 'Cancel'}
+                        </button>
+                      )}
+                      {booking.status === 'completed' && (
+                        <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2">
+                          <Star size={16} />
+                          <span>Rate & Review</span>
+                        </button>
+                      )}
                     </div>
                   </div>
-                );
-              })}
+                </div>
+              ))}
             </div>
           )}
         </div>

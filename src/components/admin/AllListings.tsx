@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
 import { Search, Filter, MapPin, Star, DollarSign, Eye, Edit, Trash2, ToggleLeft, ToggleRight, Calendar } from 'lucide-react';
-import { mockParkingSpaces } from '../../data/mockData';
+import { useSupabaseData } from '../../hooks/useSupabaseData';
 import { ParkingSpace } from '../../types';
+import { supabase } from '../../lib/supabase';
 
 export const AllListings: React.FC = () => {
+  const { parkingSpaces, loading, error } = useSupabaseData();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const filteredSpaces = mockParkingSpaces.filter(space => {
+  const filteredSpaces = parkingSpaces.filter(space => {
     const matchesSearch = space.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          space.city.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesType = selectedType === 'all' || space.type === selectedType;
@@ -19,6 +22,44 @@ export const AllListings: React.FC = () => {
     
     return matchesSearch && matchesType && matchesStatus;
   });
+
+  const handleToggleActive = async (spaceId: string, currentStatus: boolean) => {
+    setActionLoading(spaceId);
+    try {
+      const { error } = await supabase
+        .from('parking_spaces')
+        .update({ is_active: !currentStatus })
+        .eq('id', spaceId);
+
+      if (error) throw error;
+      
+      window.location.reload();
+    } catch (error: any) {
+      alert('Error updating space: ' + error.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDeleteSpace = async (spaceId: string) => {
+    if (!confirm('Are you sure you want to delete this parking space?')) return;
+
+    setActionLoading(spaceId);
+    try {
+      const { error } = await supabase
+        .from('parking_spaces')
+        .delete()
+        .eq('id', spaceId);
+
+      if (error) throw error;
+      
+      window.location.reload();
+    } catch (error: any) {
+      alert('Error deleting space: ' + error.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -47,14 +88,20 @@ export const AllListings: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div>
               <div className="space-y-4 mb-6">
-                {space.images.map((image, index) => (
-                  <img
-                    key={index}
-                    src={image}
-                    alt={`${space.title} ${index + 1}`}
-                    className="w-full h-48 object-cover rounded-lg"
-                  />
-                ))}
+                {space.images.length > 0 ? (
+                  space.images.map((image, index) => (
+                    <img
+                      key={index}
+                      src={image}
+                      alt={`${space.title} ${index + 1}`}
+                      className="w-full h-48 object-cover rounded-lg"
+                    />
+                  ))
+                ) : (
+                  <div className="w-full h-48 bg-gray-200 flex items-center justify-center rounded-lg">
+                    <MapPin size={48} className="text-gray-400" />
+                  </div>
+                )}
               </div>
             </div>
 
@@ -120,11 +167,19 @@ export const AllListings: React.FC = () => {
               </div>
 
               <div className="flex space-x-4 pt-6 border-t">
-                <button className="flex-1 bg-gray-900 text-white py-3 px-4 rounded-lg font-semibold hover:bg-gray-800 transition-colors duration-200">
-                  Edit Listing
+                <button 
+                  onClick={() => handleToggleActive(space.id, space.isActive)}
+                  disabled={actionLoading === space.id}
+                  className="flex-1 bg-gray-900 text-white py-3 px-4 rounded-lg font-semibold hover:bg-gray-800 transition-colors duration-200 disabled:opacity-50"
+                >
+                  {actionLoading === space.id ? 'Updating...' : (space.isActive ? 'Deactivate' : 'Activate')}
                 </button>
-                <button className="px-6 py-3 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors duration-200">
-                  Remove
+                <button 
+                  onClick={() => handleDeleteSpace(space.id)}
+                  disabled={actionLoading === space.id}
+                  className="px-6 py-3 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors duration-200 disabled:opacity-50"
+                >
+                  {actionLoading === space.id ? 'Deleting...' : 'Remove'}
                 </button>
               </div>
             </div>
@@ -133,6 +188,23 @@ export const AllListings: React.FC = () => {
       </div>
     </div>
   );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-2 text-gray-600">Loading listings...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+        Error loading listings: {error}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -150,7 +222,7 @@ export const AllListings: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Total Listings</p>
-              <p className="text-2xl font-bold text-gray-900">{mockParkingSpaces.length}</p>
+              <p className="text-2xl font-bold text-gray-900">{parkingSpaces.length}</p>
             </div>
             <MapPin className="text-blue-500" size={24} />
           </div>
@@ -159,7 +231,7 @@ export const AllListings: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Active Listings</p>
-              <p className="text-2xl font-bold text-green-600">{mockParkingSpaces.filter(s => s.isActive).length}</p>
+              <p className="text-2xl font-bold text-green-600">{parkingSpaces.filter(s => s.isActive).length}</p>
             </div>
             <ToggleRight className="text-green-500" size={24} />
           </div>
@@ -169,7 +241,10 @@ export const AllListings: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Avg. Rating</p>
               <p className="text-2xl font-bold text-yellow-600">
-                {(mockParkingSpaces.reduce((sum, s) => sum + s.rating, 0) / mockParkingSpaces.length).toFixed(1)}★
+                {parkingSpaces.length > 0 ? 
+                  (parkingSpaces.reduce((sum, s) => sum + s.rating, 0) / parkingSpaces.length).toFixed(1) : 
+                  '0.0'
+                }★
               </p>
             </div>
             <Star className="text-yellow-500" size={24} />
@@ -180,7 +255,10 @@ export const AllListings: React.FC = () => {
             <div>
               <p className="text-sm font-medium text-gray-600">Avg. Price</p>
               <p className="text-2xl font-bold text-blue-600">
-                ${(mockParkingSpaces.reduce((sum, s) => sum + s.pricePerHour, 0) / mockParkingSpaces.length).toFixed(0)}/hr
+                ${parkingSpaces.length > 0 ? 
+                  (parkingSpaces.reduce((sum, s) => sum + s.pricePerHour, 0) / parkingSpaces.length).toFixed(0) : 
+                  '0'
+                }/hr
               </p>
             </div>
             <DollarSign className="text-blue-500" size={24} />
@@ -231,11 +309,17 @@ export const AllListings: React.FC = () => {
         {filteredSpaces.map((space) => (
           <div key={space.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-200">
             <div className="relative">
-              <img
-                src={space.images[0]}
-                alt={space.title}
-                className="w-full h-48 object-cover"
-              />
+              {space.images.length > 0 ? (
+                <img
+                  src={space.images[0]}
+                  alt={space.title}
+                  className="w-full h-48 object-cover"
+                />
+              ) : (
+                <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
+                  <MapPin size={48} className="text-gray-400" />
+                </div>
+              )}
               <div className="absolute top-3 right-3 flex space-x-2">
                 <div className="bg-white px-2 py-1 rounded-lg shadow-sm">
                   <span className="text-lg font-bold text-green-600">${space.pricePerHour}/hr</span>
@@ -287,7 +371,11 @@ export const AllListings: React.FC = () => {
                   <button className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors duration-200">
                     <Edit size={16} />
                   </button>
-                  <button className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200">
+                  <button 
+                    onClick={() => handleDeleteSpace(space.id)}
+                    disabled={actionLoading === space.id}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200 disabled:opacity-50"
+                  >
                     <Trash2 size={16} />
                   </button>
                 </div>

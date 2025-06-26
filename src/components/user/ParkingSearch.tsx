@@ -1,18 +1,23 @@
 import React, { useState } from 'react';
 import { Search, MapPin, Filter, Star, Clock, Car, Zap, Shield, Camera } from 'lucide-react';
-import { mockParkingSpaces } from '../../data/mockData';
+import { useSupabaseData } from '../../hooks/useSupabaseData';
 import { ParkingSpace } from '../../types';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 
 export const ParkingSearch: React.FC = () => {
+  const { user } = useAuth();
+  const { parkingSpaces, loading, error } = useSupabaseData();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null);
+  const [bookingLoading, setBookingLoading] = useState(false);
   const [filters, setFilters] = useState({
     maxPrice: 20,
     spaceType: 'all',
     amenities: [] as string[]
   });
 
-  const filteredSpaces = mockParkingSpaces.filter(space => {
+  const filteredSpaces = parkingSpaces.filter(space => {
     const matchesSearch = space.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          space.city.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesPrice = space.pricePerHour <= filters.maxPrice;
@@ -30,128 +35,209 @@ export const ParkingSearch: React.FC = () => {
     }
   };
 
-  const BookingModal = ({ space, onClose }: { space: ParkingSpace; onClose: () => void }) => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex justify-between items-start mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">{space.title}</h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 text-2xl font-light"
-            >
-              ×
-            </button>
-          </div>
+  const handleBooking = async (formData: any) => {
+    if (!user || !selectedSpace) return;
 
-          <div className="space-y-6">
-            {/* Images */}
-            <div className="grid grid-cols-2 gap-4">
-              {space.images.map((image, index) => (
-                <img
-                  key={index}
-                  src={image}
-                  alt={`${space.title} ${index + 1}`}
-                  className="w-full h-48 object-cover rounded-lg"
-                />
-              ))}
+    setBookingLoading(true);
+    try {
+      const startDateTime = new Date(`${formData.date}T${formData.startTime}`);
+      const endDateTime = new Date(`${formData.date}T${formData.endTime}`);
+      const hours = (endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60 * 60);
+      const totalAmount = hours * selectedSpace.pricePerHour;
+      const platformFee = totalAmount * 0.1;
+      const ownerEarnings = totalAmount - platformFee;
+
+      const { error } = await supabase
+        .from('bookings')
+        .insert({
+          user_id: user.id,
+          space_id: selectedSpace.id,
+          start_date: formData.date,
+          end_date: formData.date,
+          start_time: formData.startTime,
+          end_time: formData.endTime,
+          total_hours: hours,
+          hourly_rate: selectedSpace.pricePerHour,
+          total_amount: totalAmount,
+          platform_fee: platformFee,
+          owner_earnings: ownerEarnings,
+          status: 'pending',
+          payment_status: 'pending'
+        });
+
+      if (error) throw error;
+
+      alert('Booking request submitted successfully!');
+      setSelectedSpace(null);
+    } catch (error: any) {
+      alert('Error creating booking: ' + error.message);
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
+  const BookingModal = ({ space, onClose }: { space: ParkingSpace; onClose: () => void }) => {
+    const [formData, setFormData] = useState({
+      date: new Date().toISOString().split('T')[0],
+      startTime: '09:00',
+      endTime: '17:00'
+    });
+
+    const calculateTotal = () => {
+      const start = new Date(`${formData.date}T${formData.startTime}`);
+      const end = new Date(`${formData.date}T${formData.endTime}`);
+      const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+      return hours * space.pricePerHour;
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6">
+            <div className="flex justify-between items-start mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">{space.title}</h2>
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-600 text-2xl font-light"
+              >
+                ×
+              </button>
             </div>
 
-            {/* Details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-3">Location</h3>
-                <div className="flex items-start space-x-2 text-gray-600 mb-4">
-                  <MapPin size={16} className="mt-1 flex-shrink-0" />
-                  <span className="text-sm">{space.address}, {space.city}, {space.state}</span>
-                </div>
-
-                <h3 className="font-semibold text-gray-900 mb-3">Amenities</h3>
-                <div className="flex flex-wrap gap-2">
-                  {space.amenities.map((amenity, index) => (
-                    <div key={index} className="flex items-center space-x-1 bg-gray-100 px-3 py-1 rounded-full">
-                      {getAmenityIcon(amenity)}
-                      <span className="text-sm text-gray-700">{amenity}</span>
-                    </div>
+            <div className="space-y-6">
+              {/* Images */}
+              {space.images.length > 0 && (
+                <div className="grid grid-cols-2 gap-4">
+                  {space.images.slice(0, 4).map((image, index) => (
+                    <img
+                      key={index}
+                      src={image}
+                      alt={`${space.title} ${index + 1}`}
+                      className="w-full h-48 object-cover rounded-lg"
+                    />
                   ))}
                 </div>
-              </div>
+              )}
 
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-3">Pricing & Details</h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Price per hour:</span>
-                    <span className="font-semibold text-green-600">${space.pricePerHour}</span>
+              {/* Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-3">Location</h3>
+                  <div className="flex items-start space-x-2 text-gray-600 mb-4">
+                    <MapPin size={16} className="mt-1 flex-shrink-0" />
+                    <span className="text-sm">{space.address}, {space.city}, {space.state}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Space size:</span>
-                    <span className="font-medium capitalize">{space.size}</span>
+
+                  <h3 className="font-semibold text-gray-900 mb-3">Amenities</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {space.amenities.map((amenity, index) => (
+                      <div key={index} className="flex items-center space-x-1 bg-gray-100 px-3 py-1 rounded-full">
+                        {getAmenityIcon(amenity)}
+                        <span className="text-sm text-gray-700">{amenity}</span>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Type:</span>
-                    <span className="font-medium capitalize">{space.type}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Rating:</span>
-                    <div className="flex items-center space-x-1">
-                      <Star size={16} className="text-yellow-400 fill-current" />
-                      <span className="font-medium">{space.rating}</span>
-                      <span className="text-gray-500">({space.reviewCount})</span>
+                </div>
+
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-3">Pricing & Details</h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Price per hour:</span>
+                      <span className="font-semibold text-green-600">${space.pricePerHour}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Space size:</span>
+                      <span className="font-medium capitalize">{space.size}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Type:</span>
+                      <span className="font-medium capitalize">{space.type}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Rating:</span>
+                      <div className="flex items-center space-x-1">
+                        <Star size={16} className="text-yellow-400 fill-current" />
+                        <span className="font-medium">{space.rating}</span>
+                        <span className="text-gray-500">({space.reviewCount})</span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Booking Form */}
-            <div className="border-t pt-6">
-              <h3 className="font-semibold text-gray-900 mb-4">Book this space</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
-                  <input
-                    type="date"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    defaultValue={new Date().toISOString().split('T')[0]}
-                  />
+              {/* Booking Form */}
+              <div className="border-t pt-6">
+                <h3 className="font-semibold text-gray-900 mb-4">Book this space</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
+                    <input
+                      type="date"
+                      value={formData.date}
+                      onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Start time</label>
+                    <input
+                      type="time"
+                      value={formData.startTime}
+                      onChange={(e) => setFormData(prev => ({ ...prev, startTime: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">End time</label>
+                    <input
+                      type="time"
+                      value={formData.endTime}
+                      onChange={(e) => setFormData(prev => ({ ...prev, endTime: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Duration</label>
-                  <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                    <option value="1">1 hour - ${space.pricePerHour}</option>
-                    <option value="2">2 hours - ${space.pricePerHour * 2}</option>
-                    <option value="4">4 hours - ${space.pricePerHour * 4}</option>
-                    <option value="8">8 hours - ${space.pricePerHour * 8}</option>
-                    <option value="24">Full day - ${space.pricePerHour * 20}</option>
-                  </select>
+                
+                <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium">Total Amount:</span>
+                    <span className="text-xl font-bold text-green-600">${calculateTotal().toFixed(2)}</span>
+                  </div>
                 </div>
+
+                <button 
+                  onClick={() => handleBooking(formData)}
+                  disabled={bookingLoading}
+                  className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition-all duration-200 disabled:opacity-50"
+                >
+                  {bookingLoading ? 'Creating Booking...' : 'Request Booking'}
+                </button>
               </div>
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Start time</label>
-                  <input
-                    type="time"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">End time</label>
-                  <input
-                    type="time"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-              <button className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-4 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition-all duration-200">
-                Request Booking
-              </button>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-2 text-gray-600">Loading parking spaces...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+        Error loading parking spaces: {error}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -215,11 +301,17 @@ export const ParkingSearch: React.FC = () => {
         {filteredSpaces.map((space) => (
           <div key={space.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow duration-200">
             <div className="relative">
-              <img
-                src={space.images[0]}
-                alt={space.title}
-                className="w-full h-48 object-cover"
-              />
+              {space.images.length > 0 ? (
+                <img
+                  src={space.images[0]}
+                  alt={space.title}
+                  className="w-full h-48 object-cover"
+                />
+              ) : (
+                <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
+                  <Car size={48} className="text-gray-400" />
+                </div>
+              )}
               <div className="absolute top-3 right-3 bg-white px-2 py-1 rounded-lg shadow-sm">
                 <span className="text-lg font-bold text-green-600">${space.pricePerHour}/hr</span>
               </div>

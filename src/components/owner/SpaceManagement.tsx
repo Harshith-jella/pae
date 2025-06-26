@@ -1,155 +1,307 @@
 import React, { useState } from 'react';
 import { Plus, MapPin, Star, Clock, DollarSign, Edit, Trash2, Eye, ToggleLeft, ToggleRight } from 'lucide-react';
 import { ParkingSpace } from '../../types';
-import { mockParkingSpaces } from '../../data/mockData';
+import { useUserSpaces } from '../../hooks/useSupabaseData';
 import { useAuth } from '../../contexts/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 export const SpaceManagement: React.FC = () => {
   const { user } = useAuth();
+  const { spaces: ownerSpaces, loading, error } = useUserSpaces(user?.id || '');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedSpace, setSelectedSpace] = useState<ParkingSpace | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  const ownerSpaces = mockParkingSpaces.filter(space => space.ownerId === user?.id);
+  const handleAddSpace = async (formData: any) => {
+    if (!user) return;
 
-  const AddSpaceModal = ({ onClose }: { onClose: () => void }) => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Add New Parking Space</h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 text-2xl font-light"
-            >
-              ×
-            </button>
-          </div>
+    setActionLoading('add');
+    try {
+      const { error } = await supabase
+        .from('parking_spaces')
+        .insert({
+          owner_id: user.id,
+          title: formData.title,
+          description: formData.description,
+          address: formData.address,
+          city: formData.city,
+          state: formData.state,
+          zip_code: formData.zipCode,
+          price_per_hour: parseFloat(formData.pricePerHour),
+          size: formData.size,
+          type: formData.type,
+          amenities: formData.amenities,
+          images: formData.images || []
+        });
 
-          <form className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Space Title</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., Downtown Secure Garage"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Price per Hour ($)</label>
-                <input
-                  type="number"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="8.00"
-                />
-              </div>
+      if (error) throw error;
+
+      alert('Parking space added successfully!');
+      setShowAddModal(false);
+      window.location.reload();
+    } catch (error: any) {
+      alert('Error adding space: ' + error.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleToggleActive = async (spaceId: string, currentStatus: boolean) => {
+    setActionLoading(spaceId);
+    try {
+      const { error } = await supabase
+        .from('parking_spaces')
+        .update({ is_active: !currentStatus })
+        .eq('id', spaceId);
+
+      if (error) throw error;
+      
+      window.location.reload();
+    } catch (error: any) {
+      alert('Error updating space: ' + error.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDeleteSpace = async (spaceId: string) => {
+    if (!confirm('Are you sure you want to delete this parking space?')) return;
+
+    setActionLoading(spaceId);
+    try {
+      const { error } = await supabase
+        .from('parking_spaces')
+        .delete()
+        .eq('id', spaceId);
+
+      if (error) throw error;
+      
+      window.location.reload();
+    } catch (error: any) {
+      alert('Error deleting space: ' + error.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const AddSpaceModal = ({ onClose }: { onClose: () => void }) => {
+    const [formData, setFormData] = useState({
+      title: '',
+      description: '',
+      address: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      pricePerHour: '',
+      size: 'standard',
+      type: 'outdoor',
+      amenities: [] as string[]
+    });
+
+    const availableAmenities = [
+      '24/7 Security', 'EV Charging', 'CCTV', 'Covered', 'Well Lit', 
+      'Accessible', 'Valet Service', 'Car Wash'
+    ];
+
+    const handleAmenityChange = (amenity: string, checked: boolean) => {
+      setFormData(prev => ({
+        ...prev,
+        amenities: checked 
+          ? [...prev.amenities, amenity]
+          : prev.amenities.filter(a => a !== amenity)
+      }));
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault();
+      handleAddSpace(formData);
+    };
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="p-6">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Add New Parking Space</h2>
+              <button
+                onClick={onClose}
+                className="text-gray-400 hover:text-gray-600 text-2xl font-light"
+              >
+                ×
+              </button>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-              <textarea
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Describe your parking space, its features, and any important details..."
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Space Type</label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                  <option value="garage">Garage</option>
-                  <option value="covered">Covered</option>
-                  <option value="outdoor">Outdoor</option>
-                  <option value="street">Street</option>
-                </select>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Space Title</label>
+                  <input
+                    type="text"
+                    value={formData.title}
+                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="e.g., Downtown Secure Garage"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Price per Hour ($)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={formData.pricePerHour}
+                    onChange={(e) => setFormData(prev => ({ ...prev, pricePerHour: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="8.00"
+                    required
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Space Size</label>
-                <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                  <option value="compact">Compact</option>
-                  <option value="standard">Standard</option>
-                  <option value="large">Large</option>
-                  <option value="oversized">Oversized</option>
-                </select>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Street Address</label>
-                <input
-                  type="text"
+                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                <textarea
+                  rows={3}
+                  value={formData.description}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="123 Main Street"
+                  placeholder="Describe your parking space, its features, and any important details..."
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="San Francisco"
-                />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Space Type</label>
+                  <select 
+                    value={formData.type}
+                    onChange={(e) => setFormData(prev => ({ ...prev, type: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="garage">Garage</option>
+                    <option value="covered">Covered</option>
+                    <option value="outdoor">Outdoor</option>
+                    <option value="street">Street</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Space Size</label>
+                  <select 
+                    value={formData.size}
+                    onChange={(e) => setFormData(prev => ({ ...prev, size: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="compact">Compact</option>
+                    <option value="standard">Standard</option>
+                    <option value="large">Large</option>
+                    <option value="oversized">Oversized</option>
+                  </select>
+                </div>
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Street Address</label>
+                  <input
+                    type="text"
+                    value={formData.address}
+                    onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="123 Main Street"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
+                  <input
+                    type="text"
+                    value={formData.city}
+                    onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="San Francisco"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
+                  <input
+                    type="text"
+                    value={formData.state}
+                    onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="CA"
+                    required
+                  />
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">ZIP Code</label>
                 <input
                   type="text"
+                  value={formData.zipCode}
+                  onChange={(e) => setFormData(prev => ({ ...prev, zipCode: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="94105"
+                  required
                 />
               </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Amenities</label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {['24/7 Security', 'EV Charging', 'CCTV', 'Covered', 'Well Lit', 'Accessible', 'Valet Service', 'Car Wash'].map((amenity) => (
-                  <label key={amenity} className="flex items-center space-x-2">
-                    <input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                    <span className="text-sm text-gray-700">{amenity}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Photos</label>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-                <div className="text-gray-500">
-                  <p className="mb-2">Drag and drop photos here, or click to select</p>
-                  <p className="text-sm">Upload up to 5 photos (JPG, PNG, max 5MB each)</p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Amenities</label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {availableAmenities.map((amenity) => (
+                    <label key={amenity} className="flex items-center space-x-2">
+                      <input 
+                        type="checkbox" 
+                        checked={formData.amenities.includes(amenity)}
+                        onChange={(e) => handleAmenityChange(amenity, e.target.checked)}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" 
+                      />
+                      <span className="text-sm text-gray-700">{amenity}</span>
+                    </label>
+                  ))}
                 </div>
+              </div>
+
+              <div className="flex justify-end space-x-4 pt-6 border-t">
                 <button
                   type="button"
-                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+                  onClick={onClose}
+                  className="px-6 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
                 >
-                  Choose Photos
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading === 'add'}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50"
+                >
+                  {actionLoading === 'add' ? 'Adding...' : 'Add Space'}
                 </button>
               </div>
-            </div>
-
-            <div className="flex justify-end space-x-4 pt-6 border-t">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-6 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
-              >
-                Add Space
-              </button>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-2 text-gray-600">Loading your spaces...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+        Error loading spaces: {error}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -186,21 +338,29 @@ export const SpaceManagement: React.FC = () => {
           {ownerSpaces.map((space) => (
             <div key={space.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="relative">
-                <img
-                  src={space.images[0]}
-                  alt={space.title}
-                  className="w-full h-48 object-cover"
-                />
+                {space.images.length > 0 ? (
+                  <img
+                    src={space.images[0]}
+                    alt={space.title}
+                    className="w-full h-48 object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
+                    <MapPin size={48} className="text-gray-400" />
+                  </div>
+                )}
                 <div className="absolute top-3 right-3 flex space-x-2">
                   <div className="bg-white px-2 py-1 rounded-lg shadow-sm">
                     <span className="text-lg font-bold text-green-600">${space.pricePerHour}/hr</span>
                   </div>
                   <button
+                    onClick={() => handleToggleActive(space.id, space.isActive)}
+                    disabled={actionLoading === space.id}
                     className={`p-2 rounded-lg shadow-sm ${
                       space.isActive 
                         ? 'bg-green-500 text-white' 
                         : 'bg-gray-500 text-white'
-                    }`}
+                    } disabled:opacity-50`}
                   >
                     {space.isActive ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
                   </button>
@@ -223,12 +383,12 @@ export const SpaceManagement: React.FC = () => {
                 
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div className="text-center p-3 bg-blue-50 rounded-lg">
-                    <div className="text-lg font-bold text-blue-600">45</div>
-                    <div className="text-xs text-gray-600">Total Bookings</div>
+                    <div className="text-lg font-bold text-blue-600">{space.reviewCount}</div>
+                    <div className="text-xs text-gray-600">Reviews</div>
                   </div>
                   <div className="text-center p-3 bg-green-50 rounded-lg">
-                    <div className="text-lg font-bold text-green-600">$1,280</div>
-                    <div className="text-xs text-gray-600">Total Earned</div>
+                    <div className="text-lg font-bold text-green-600">${(space.pricePerHour * 8).toFixed(0)}</div>
+                    <div className="text-xs text-gray-600">Daily Rate</div>
                   </div>
                 </div>
                 
@@ -250,7 +410,11 @@ export const SpaceManagement: React.FC = () => {
                     <button className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors duration-200">
                       <Edit size={16} />
                     </button>
-                    <button className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200">
+                    <button 
+                      onClick={() => handleDeleteSpace(space.id)}
+                      disabled={actionLoading === space.id}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors duration-200 disabled:opacity-50"
+                    >
                       <Trash2 size={16} />
                     </button>
                   </div>
@@ -282,40 +446,24 @@ export const SpaceManagement: React.FC = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div>
                   <div className="space-y-4 mb-6">
-                    {selectedSpace.images.map((image, index) => (
-                      <img
-                        key={index}
-                        src={image}
-                        alt={`${selectedSpace.title} ${index + 1}`}
-                        className="w-full h-48 object-cover rounded-lg"
-                      />
-                    ))}
+                    {selectedSpace.images.length > 0 ? (
+                      selectedSpace.images.map((image, index) => (
+                        <img
+                          key={index}
+                          src={image}
+                          alt={`${selectedSpace.title} ${index + 1}`}
+                          className="w-full h-48 object-cover rounded-lg"
+                        />
+                      ))
+                    ) : (
+                      <div className="w-full h-48 bg-gray-200 flex items-center justify-center rounded-lg">
+                        <MapPin size={48} className="text-gray-400" />
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="space-y-6">
-                  <div>
-                    <h3 className="font-semibold text-gray-900 mb-3">Performance</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="text-center p-4 bg-blue-50 rounded-lg">
-                        <div className="text-2xl font-bold text-blue-600">45</div>
-                        <div className="text-sm text-gray-600">Total Bookings</div>
-                      </div>
-                      <div className="text-center p-4 bg-green-50 rounded-lg">
-                        <div className="text-2xl font-bold text-green-600">$1,280</div>
-                        <div className="text-sm text-gray-600">Total Revenue</div>
-                      </div>
-                      <div className="text-center p-4 bg-purple-50 rounded-lg">
-                        <div className="text-2xl font-bold text-purple-600">4.7★</div>
-                        <div className="text-sm text-gray-600">Avg Rating</div>
-                      </div>
-                      <div className="text-center p-4 bg-orange-50 rounded-lg">
-                        <div className="text-2xl font-bold text-orange-600">89%</div>
-                        <div className="text-sm text-gray-600">Occupancy</div>
-                      </div>
-                    </div>
-                  </div>
-
                   <div>
                     <h3 className="font-semibold text-gray-900 mb-3">Details</h3>
                     <div className="space-y-3">
@@ -340,6 +488,11 @@ export const SpaceManagement: React.FC = () => {
                         </span>
                       </div>
                     </div>
+                  </div>
+
+                  <div>
+                    <h3 className="font-semibold text-gray-900 mb-3">Location</h3>
+                    <p className="text-gray-600">{selectedSpace.address}, {selectedSpace.city}, {selectedSpace.state} {selectedSpace.zipCode}</p>
                   </div>
 
                   <div>
